@@ -1,9 +1,8 @@
-#-----------------------------------------------------------------------------
 set(MODULE_NAME PulmoVision)
 
-#-----------------------------------------------------------------------------
 set(MODULE_PYTHON_SCRIPTS
   ${MODULE_NAME}.py
+
   PulmoBackend/__init__.py
   PulmoBackend/inference.py
   PulmoBackend/pipeline.py
@@ -20,14 +19,18 @@ set(MODULE_PYTHON_RESOURCES
   Resources/UI/${MODULE_NAME}.ui
 )
 
-#-----------------------------------------------------------------------------
 slicerMacroBuildScriptedModule(
   NAME ${MODULE_NAME}
   SCRIPTS ${MODULE_PYTHON_SCRIPTS}
   RESOURCES ${MODULE_PYTHON_RESOURCES}
+  WITH_GENERIC_TESTS
 )
 
-# Optional: keep only if you want the basic wizard unittest
 if(BUILD_TESTING)
+  # Register the unittest subclass in the main script as a ctest.
+  # Note that the test will also be available at runtime.
+  # Can remove this if want to keep all testing in the Testing folder
   slicer_add_python_unittest(SCRIPT ${MODULE_NAME}.py)
+  # Additional build-time testing
+  add_subdirectory(Testing)
 endif()
