@@ -1,0 +1,63 @@
+ 
+# Python Caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pkl
+
+# Build and Distribution
+build/
+dist/
+*.egg-info/
+
+# Virtual Environments
+venv/
+env/
+.venv/
+.conda/
+conda/
+
+# Model Checkpoints / Training
+*.pt
+*.pth
+*.bin
+*.ckpt
+experiments/model_checkpoints/
+experiments/training_logs/
+
+# Data Files (large / generated)
+data/**/*.nii
+data/**/*.nii.gz
+data/**/*.nrrd
+data/**/*.mha
+data/**/*.mhd
+data/synthetic/
+data/sample_ct/
+
+ 
+# Slicer Module Temp Files
+*.fcsv
+*Scene.mrb
+*Scene.mrml
+*.png
+*.jpg
+
+ 
+# Logs
+*.log
+*.txt~
+nohup.out
+
+ 
+# IDE / Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+ 
+# OS-specific files
+.DS_Store
+Thumbs.db
+
