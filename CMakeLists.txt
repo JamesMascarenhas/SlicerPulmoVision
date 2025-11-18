@@ -4,7 +4,7 @@ project(PulmoVision)
 
 #-----------------------------------------------------------------------------
 # Extension meta-information
-set(EXTENSION_HOMEPAGE "https://github.com/JamesMascarenhas/PulmoVision")   
+set(EXTENSION_HOMEPAGE "https://github.com/JamesMascarenhas/SlicerPulmoVision")   
 set(EXTENSION_CATEGORY "Radiology")                                         
 set(EXTENSION_CONTRIBUTORS "James Mascarenhas (Queen's University)")
 set(EXTENSION_DESCRIPTION "PulmoVision is a 3D Slicer extension providing an end-to-end pipeline for CT lung tumor preprocessing, 3D U-Net segmentation, and quality assessment.")
