@@ -18,18 +18,18 @@ from slicer import vtkMRMLScalarVolumeNode
 
 
 #
-# pulmovision
+# PulmoVision
 #
 
 
-class pulmovision(ScriptedLoadableModule):
+class PulmoVision(ScriptedLoadableModule):
     """Uses ScriptedLoadableModule base class, available at:
     https://github.com/Slicer/Slicer/blob/main/Base/Python/slicer/ScriptedLoadableModule.py
     """
 
     def __init__(self, parent):
         ScriptedLoadableModule.__init__(self, parent)
-        self.parent.title = _("pulmovision")  # TODO: make this more human readable by adding spaces
+        self.parent.title = _("PulmoVision")  # TODO: make this more human readable by adding spaces
         # TODO: set categories (folders where the module shows up in the module selector)
         self.parent.categories = [translate("qSlicerAbstractCoreModule", "Examples")]
         self.parent.dependencies = []  # TODO: add here list of module names that this module requires
@@ -38,7 +38,7 @@ class pulmovision(ScriptedLoadableModule):
         # _() function marks text as translatable to other languages
         self.parent.helpText = _("""
 This is an example of scripted loadable module bundled in an extension.
-See more information in <a href="https://github.com/organization/projectname#pulmovision">module documentation</a>.
+See more information in <a href="https://github.com/organization/projectname#PulmoVision">module documentation</a>.
 """)
         # TODO: replace with organization, grant and thanks
         self.parent.acknowledgementText = _("""
@@ -67,46 +67,46 @@ def registerSampleData():
     # To ensure that the source code repository remains small (can be downloaded and installed quickly)
     # it is recommended to store data sets that are larger than a few MB in a Github release.
 
-    # pulmovision1
+    # PulmoVision1
     SampleData.SampleDataLogic.registerCustomSampleDataSource(
         # Category and sample name displayed in Sample Data module
-        category="pulmovision",
-        sampleName="pulmovision1",
+        category="PulmoVision",
+        sampleName="PulmoVision1",
         # Thumbnail should have size of approximately 260x280 pixels and stored in Resources/Icons folder.
         # It can be created by Screen Capture module, "Capture all views" option enabled, "Number of images" set to "Single".
-        thumbnailFileName=os.path.join(iconsPath, "pulmovision1.png"),
+        thumbnailFileName=os.path.join(iconsPath, "PulmoVision1.png"),
         # Download URL and target file name
         uris="https://github.com/Slicer/SlicerTestingData/releases/download/SHA256/998cb522173839c78657f4bc0ea907cea09fd04e44601f17c82ea27927937b95",
-        fileNames="pulmovision1.nrrd",
+        fileNames="PulmoVision1.nrrd",
         # Checksum to ensure file integrity. Can be computed by this command:
         #  import hashlib; print(hashlib.sha256(open(filename, "rb").read()).hexdigest())
         checksums="SHA256:998cb522173839c78657f4bc0ea907cea09fd04e44601f17c82ea27927937b95",
         # This node name will be used when the data set is loaded
-        nodeNames="pulmovision1",
+        nodeNames="PulmoVision1",
     )
 
-    # pulmovision2
+    # PulmoVision2
     SampleData.SampleDataLogic.registerCustomSampleDataSource(
         # Category and sample name displayed in Sample Data module
-        category="pulmovision",
-        sampleName="pulmovision2",
-        thumbnailFileName=os.path.join(iconsPath, "pulmovision2.png"),
+        category="PulmoVision",
+        sampleName="PulmoVision2",
+        thumbnailFileName=os.path.join(iconsPath, "PulmoVision2.png"),
         # Download URL and target file name
         uris="https://github.com/Slicer/SlicerTestingData/releases/download/SHA256/1a64f3f422eb3d1c9b093d1a18da354b13bcf307907c66317e2463ee530b7a97",
-        fileNames="pulmovision2.nrrd",
+        fileNames="PulmoVision2.nrrd",
         checksums="SHA256:1a64f3f422eb3d1c9b093d1a18da354b13bcf307907c66317e2463ee530b7a97",
         # This node name will be used when the data set is loaded
-        nodeNames="pulmovision2",
+        nodeNames="PulmoVision2",
     )
 
 
 #
-# pulmovisionParameterNode
+# PulmoVisionParameterNode
 #
 
 
 @parameterNodeWrapper
-class pulmovisionParameterNode:
+class PulmoVisionParameterNode:
     """
     The parameters needed by module.
 
@@ -125,11 +125,11 @@ class pulmovisionParameterNode:
 
 
 #
-# pulmovisionWidget
+# PulmoVisionWidget
 #
 
 
-class pulmovisionWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
+class PulmoVisionWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     """Uses ScriptedLoadableModuleWidget base class, available at:
     https://github.com/Slicer/Slicer/blob/main/Base/Python/slicer/ScriptedLoadableModule.py
     """
@@ -148,7 +148,7 @@ class pulmovisionWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Load widget from .ui file (created by Qt Designer).
         # Additional widgets can be instantiated manually and added to self.layout.
-        uiWidget = slicer.util.loadUI(self.resourcePath("UI/pulmovision.ui"))
+        uiWidget = slicer.util.loadUI(self.resourcePath("UI/PulmoVision.ui"))
         self.layout.addWidget(uiWidget)
         self.ui = slicer.util.childWidgetVariables(uiWidget)
 
@@ -159,7 +159,7 @@ class pulmovisionWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Create logic class. Logic implements all computations that should be possible to run
         # in batch mode, without a graphical user interface.
-        self.logic = pulmovisionLogic()
+        self.logic = PulmoVisionLogic()
 
         # Connections
 
@@ -214,7 +214,7 @@ class pulmovisionWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             if firstVolumeNode:
                 self._parameterNode.inputVolume = firstVolumeNode
 
-    def setParameterNode(self, inputParameterNode: Optional[pulmovisionParameterNode]) -> None:
+    def setParameterNode(self, inputParameterNode: Optional[PulmoVisionParameterNode]) -> None:
         """
         Set and observe parameter node.
         Observation is needed because when the parameter node is changed then the GUI must be updated immediately.
@@ -254,11 +254,11 @@ class pulmovisionWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
 
 #
-# pulmovisionLogic
+# PulmoVisionLogic
 #
 
 
-class pulmovisionLogic(ScriptedLoadableModuleLogic):
+class PulmoVisionLogic(ScriptedLoadableModuleLogic):
     """This class should implement all the actual
     computation done by your module.  The interface
     should be such that other python code can import
@@ -273,7 +273,7 @@ class pulmovisionLogic(ScriptedLoadableModuleLogic):
         ScriptedLoadableModuleLogic.__init__(self)
 
     def getParameterNode(self):
-        return pulmovisionParameterNode(super().getParameterNode())
+        return PulmoVisionParameterNode(super().getParameterNode())
 
     def process(self,
                 inputVolume: vtkMRMLScalarVolumeNode,
@@ -315,11 +315,11 @@ class pulmovisionLogic(ScriptedLoadableModuleLogic):
 
 
 #
-# pulmovisionTest
+# PulmoVisionTest
 #
 
 
-class pulmovisionTest(ScriptedLoadableModuleTest):
+class PulmoVisionTest(ScriptedLoadableModuleTest):
     """
     This is the test case for your scripted module.
     Uses ScriptedLoadableModuleTest base class, available at:
@@ -333,9 +333,9 @@ class pulmovisionTest(ScriptedLoadableModuleTest):
     def runTest(self):
         """Run as few or as many tests as needed here."""
         self.setUp()
-        self.test_pulmovision1()
+        self.test_PulmoVision1()
 
-    def test_pulmovision1(self):
+    def test_PulmoVision1(self):
         """Ideally you should have several levels of tests.  At the lowest level
         tests should exercise the functionality of the logic with different inputs
         (both valid and invalid).  At higher levels your tests should emulate the
@@ -354,7 +354,7 @@ class pulmovisionTest(ScriptedLoadableModuleTest):
         import SampleData
 
         registerSampleData()
-        inputVolume = SampleData.downloadSample("pulmovision1")
+        inputVolume = SampleData.downloadSample("PulmoVision1")
         self.delayDisplay("Loaded test data set")
 
         inputScalarRange = inputVolume.GetImageData().GetScalarRange()
@@ -366,7 +366,7 @@ class pulmovisionTest(ScriptedLoadableModuleTest):
 
         # Test the module logic
 
-        logic = pulmovisionLogic()
+        logic = PulmoVisionLogic()
 
         # Test algorithm with non-inverted threshold
         logic.process(inputVolume, outputVolume, threshold, True)
