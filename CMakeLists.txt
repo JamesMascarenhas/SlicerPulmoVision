@@ -4,8 +4,8 @@ project(PulmoVision)
 
 #-----------------------------------------------------------------------------
 # Extension meta-information
-set(EXTENSION_HOMEPAGE "https://github.com/<your-username>/PulmoVision")   # or leave empty for now
-set(EXTENSION_CATEGORY "Radiology")                                         # or "Segmentation"
+set(EXTENSION_HOMEPAGE "https://github.com/JamesMascarenhas/PulmoVision")   
+set(EXTENSION_CATEGORY "Radiology")                                         
 set(EXTENSION_CONTRIBUTORS "James Mascarenhas (Queen's University)")
 set(EXTENSION_DESCRIPTION "PulmoVision is a 3D Slicer extension providing an end-to-end pipeline for CT lung tumor preprocessing, 3D U-Net segmentation, and quality assessment.")
 # These URLs only matter if you host an icon/screenshot on GitHub later
@@ -20,7 +20,7 @@ include(${Slicer_USE_FILE})
 
 #-----------------------------------------------------------------------------
 # Extension modules (directories)
-add_subdirectory(PulmoVision)   # folder that contains PulmoVision.py + its CMakeLists
+add_subdirectory(slicer_module/PulmoVision)   # folder that contains PulmoVision.py + its CMakeLists
 
 #-----------------------------------------------------------------------------
 include(${Slicer_EXTENSION_GENERATE_CONFIG})
