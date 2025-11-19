@@ -14,7 +14,7 @@ from slicer.parameterNodeWrapper import (
     WithinRange,
 )
 
-from slicer import vtkMRMLScalarVolumeNode
+from slicer import vtkMRMLScalarVolumeNode, vtkMRMLTableNode 
 
 
 #
@@ -110,18 +110,28 @@ class PulmoVisionParameterNode:
     """
     The parameters needed by module.
 
-    inputVolume - The volume to threshold.
-    imageThreshold - The value at which to threshold the input volume.
-    invertThreshold - If true, will invert the threshold.
-    thresholdedVolume - The output volume that will contain the thresholded volume.
-    invertedVolume - The output volume that will contain the inverted thresholded volume.
+    inputVolume - CT input volume
+    windowCenter/windowWidth - CT windowing parameters forwarded to the backend
+    segmentationMethod - Backend segmentation algoirthm (percentile or unet3d)
+    segmentationPercentile - Percent threshold used by the lightweight method
+    segmentationWeightsPath - Optional path to a UNet3D checkpoint file
+    postprocessEnabled - Toggle cleanup stage
+    keepLargestComponent/minComponentSize - Postprocessing hints (placeholder in v1)
+    outputMaskVolume - Segmentation mask destination
+    outputFeatureTable -Table node for radiomics summary
     """
 
     inputVolume: vtkMRMLScalarVolumeNode
-    imageThreshold: Annotated[float, WithinRange(-100, 500)] = 100
-    invertThreshold: bool = False
-    thresholdedVolume: vtkMRMLScalarVolumeNode
-    invertedVolume: vtkMRMLScalarVolumeNode
+    windowCenter: float = -600.0
+    windowWidth: float = 1500.0
+    segmentationMethod: "percentile"
+    segmentationPercentile: Annotated[float, WithinRange(80.0, 100.0)] = 99.0
+    segmentationWedightsPath: Optional[str] = ""
+    postprocessEnabled: bool = True
+    keepLargestComponent: bool = False
+    minComponentSize: int = 0
+    outputMaskVolume: vtkMRMLScalarVolumeNode
+    outputFeatureTable: vtkMRMLTableNode
 
 
 #
@@ -208,11 +218,19 @@ class PulmoVisionWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         self.setParameterNode(self.logic.getParameterNode())
 
-        # Select default input nodes if nothing is selected yet to save a few clicks for the user
+        # Select default input/output nodes if nothing is selected yet to save a few clicks for ths user
         if not self._parameterNode.inputVolume:
             firstVolumeNode = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLScalarVolumeNode")
             if firstVolumeNode:
                 self._parameterNode.inputVolume = firstVolumeNode
+        
+        if not self._paraneterNode.outputMaskVolume:
+            maskNode = slicer.mrmlScene.AddNewNewNodeByClass("vtkMRMLScalarVolumeNode", "PulmoVisionMask")
+            self._parameterNode.outputMaskVolume = maskNode
+        
+        if not self._parameterNode.outputFeatureTable:
+            tableNode = slicer.mrmlScene.AddNewNewNodeByClass("vtkMRMLTableNode", "PulmoVisionRadiomics")
+            self._parameterNode.outputFeatureTable = tableNode
 
     def setParameterNode(self, inputParameterNode: Optional[PulmoVisionParameterNode]) -> None:
         """
@@ -232,28 +250,27 @@ class PulmoVisionWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self._checkCanApply()
 
     def _checkCanApply(self, caller=None, event=None) -> None:
-        if self._parameterNode and self._parameterNode.inputVolume and self._parameterNode.thresholdedVolume:
-            self.ui.applyButton.toolTip = _("Compute output volume")
+        if self._parameterNode and self._parameterNode.inputVolume and self._parameterNode.outputMaskVolume:
+            self.ui.applyButton.toolTip = _("Run PulmoVision segmentation and radiomics")
             self.ui.applyButton.enabled = True
         else:
-            self.ui.applyButton.toolTip = _("Select input and output volume nodes")
+            self.ui.applyButton.toolTip = _("Select input and output nodes")
             self.ui.applyButton.enabled = False
 
     def onApplyButton(self) -> None:
         """Run processing when user clicks "Apply" button."""
-        with slicer.util.tryWithErrorDisplay(_("Failed to compute results."), waitCursor=True):
-            # Compute output
-            self.logic.process(self.ui.inputSelector.currentNode(), self.ui.outputSelector.currentNode(),
-                               self.ui.imageThresholdSliderWidget.value, self.ui.invertOutputCheckBox.checked)
+        self.ui.statusLabel.text = _("Running PulmoVision pipeline…")
+        try:
+            with slicer.util.tryWithErrorDisplay(_("PulmoVision processing failed."), waitCursor=True):
+                self.logic.process(self._parameterNode, showResult=True)
+        except Exception:
+            self.ui.statusLabel.text = _("PulmoVision processing failed")
+            raise
+        else:
+            self.ui.statusLabel.text = _("PulmoVision completed successfully")
 
-            # Compute inverted output (if needed)
-            if self.ui.invertedOutputSelector.currentNode():
-                # If additional output volume is selected then result with inverted threshold is written there
-                self.logic.process(self.ui.inputSelector.currentNode(), self.ui.invertedOutputSelector.currentNode(),
-                                   self.ui.imageThresholdSliderWidget.value, not self.ui.invertOutputCheckBox.checked, showResult=False)
 
-
-#
+# 
 # PulmoVisionLogic
 #
 
@@ -275,24 +292,20 @@ class PulmoVisionLogic(ScriptedLoadableModuleLogic):
     def getParameterNode(self):
         return PulmoVisionParameterNode(super().getParameterNode())
 
-    def process(self,
-                inputVolume: vtkMRMLScalarVolumeNode,
-                outputVolume: vtkMRMLScalarVolumeNode,
-                imageThreshold: float,
-                invert: bool = False,
-                showResult: bool = True) -> None:
+    def process(self, parameterNode: PulmoVisionParameterNode, showResult: bool = True):
         """
-        Run the PulmoVision pipeline.
+        Run the PulmoVision pipeline based on the parameter node values
 
-        NOTE: imageThreshold and invert are kept in the signature so the
-        existing UI/ParameterNode still work, but they are currently
-        ignored by the backend pipeline. We always run the CT preprocessing
-        + 3D U-Net segmentation + postprocessing.
-        """
+        This executes CT windowing, segmentation, optional postprocessing, and 
+        updates both the mask volume and the radiomics feature table
+        Returns a dictionary with the computed mask and (if avaliable) features
+        """ 
 
-        if not inputVolume or not outputVolume:
-            raise ValueError("Input or output volume is invalid")
-
+        if not parameterNode.inputVolume:
+            raise ValueError("Input volume is invalid")
+        if not parameterNode.outputMaskVolume:
+            raise ValueError("Output mask volume is invalid")
+        
         import time
         import numpy as np
         from PulmoBackend.pipeline import run_pulmo_pipeline
@@ -300,10 +313,10 @@ class PulmoVisionLogic(ScriptedLoadableModuleLogic):
         startTime = time.time()
         logging.info("PulmoVision: processing started")
 
-        #
-        # 1. Slicer volume -> NumPy array (H, W, D)
-        #
-        # Slicer represents scalar volumes as (D, H, W) in numpy.
+        inputVolume = parameterNode.inputVolume
+        outputMaskVolume = parameterNode.outputMaskVolume
+
+        # Slicer represents scalar volumes as (D, H, W) in numpy
         inputArray_DHW = slicer.util.arrayFromVolume(inputVolume)
         if inputArray_DHW.ndim != 3:
             raise ValueError(
@@ -313,18 +326,31 @@ class PulmoVisionLogic(ScriptedLoadableModuleLogic):
         # Backend convention: (H, W, D)
         volume_HWD = np.transpose(inputArray_DHW, (1, 2, 0)).astype(np.float32)
 
-        #
-        # 2. Run backend pipeline (preprocessing -> UNet3D -> postprocessing)
-        #
+        segmentation_method = parameterNode.segmentationMethod.lower().strip()
+        seg_kwargs = {}
+        if "percentile" in segmentation_method:
+            seg_kwargs["percentile"] = float(parameterNode.segmentationPercentile)
+            segmentation_method = "percentile"
+        elif "unet3d" in segmentation_method:
+            seg_kwargs["weights_path"] = parameterNode.segmentationWeightsPath or None
+            segmentation_method = "unet3d"
+        elif not segmentation_method:
+            segmentation_method = "percentile"
+
+        post_kwargs = {
+            "keep_largest_component": bool(parameterNode.keepLargestComponent),
+            "min_size_voxels": int(parameterNode.minComponentSize),
+        }
+
         mask_HWD = run_pulmo_pipeline(
             volume_HWD,
-            window_center=-600.0,
-            window_width=1500.0,
+            window_center=float(parameterNode.windowCenter),
+            window_width=float(parameterNode.windowWidth),
             normalize=True,
-            segmentation_method="unet3d",      # use the trained 3D U-Net
-            segmentation_kwargs={},            # later: pass threshold, weights_path, etc.
-            postprocess=True,
-            postprocess_kwargs={},
+            segmentation_method=segmentation_method,
+            segmentation_kwargs=seg_kwargs,
+            postprocess=bool(parameterNode.postprocessEnabled),
+            postprocess_kwargs=post_kwargs,
             return_intermediates=False,
         )
 
@@ -334,29 +360,81 @@ class PulmoVisionLogic(ScriptedLoadableModuleLogic):
                 f"expected {volume_HWD.shape}"
             )
 
-        #
-        # 3. NumPy mask -> Slicer volume (D, H, W)
-        #
         mask_DHW = np.transpose(mask_HWD.astype(np.float32), (2, 0, 1))
 
-        # Push data into the output volume node
-        slicer.util.updateVolumeFromArray(outputVolume, mask_DHW)
+        slicer.util.updateVolumeFromArray(outputMaskVolume, mask_DHW)
+        slicer.modules.volumes.logic().CloneVolumeGeometry(inputVolume, outputMaskVolume)
 
-        # Copy geometry (spacing, origin, directions) from input volume
-        slicer.modules.volumes.logic().CloneVolumeGeometry(inputVolume, outputVolume)
-
-        #
-        # 4. Optional: show result as overlay
-        #
         if showResult:
             slicer.util.setSliceViewerLayers(
                 background=inputVolume,
-                foreground=outputVolume,
+                foreground=outputMaskVolume,
                 foregroundOpacity=0.5,
             )
 
+        feature_results = None
+        if parameterNode.outputFeatureTable:
+            feature_results = self._updateFeatureTable(
+                parameterNode.outputFeatureTable, inputArray_DHW, mask_DHW, inputVolume
+            )
+    
         stopTime = time.time()
         logging.info(f"PulmoVision: processing completed in {stopTime - startTime:.2f} seconds")
+
+        return {"mask": mask_DHW, "features": feature_results}
+
+    def _updateFeatureTable(self, tableNode, inputArray_DHW, mask_DHW, inputVolume):
+        """Populate a MRML table node with simple radiomics-style summaries."""
+
+        import numpy as np
+
+        voxel_spacing = inputVolume.GetSpacing()
+        voxel_volume_mm3 = float(voxel_spacing[0] * voxel_spacing[1] * voxel_spacing[2])
+
+        mask_binary = mask_DHW > 0
+        voxel_count = int(mask_binary.sum())
+        volume_mm3 = voxel_volume_mm3 * voxel_count
+        volume_ml = volume_mm3 / 1000.0
+
+        if voxel_count > 0:
+            masked_values = inputArray_DHW[mask_binary]
+            mean_hu = float(masked_values.mean())
+            std_hu = float(masked_values.std())
+            max_hu = float(masked_values.max())
+            min_hu = float(masked_values.min())
+        else:
+            mean_hu = float("nan")
+            std_hu = float("nan")
+            max_hu = float("nan")
+            min_hu = float("nan")
+
+        features = {
+            "Voxels": voxel_count,
+            "Volume (mm^3)": volume_mm3,
+            "Volume (mL)": volume_ml,
+            "Mean HU": mean_hu,
+            "Std HU": std_hu,
+            "Min HU": min_hu,
+            "Max HU": max_hu,
+        }
+
+        table = tableNode.GetTable()
+        table.Initialize()
+
+        nameColumn = vtk.vtkStringArray()
+        nameColumn.SetName("Feature")
+        valueColumn = vtk.vtkDoubleArray()
+        valueColumn.SetName("Value")
+        table.AddColumn(nameColumn)
+        table.AddColumn(valueColumn)
+
+        for feature_name, value in features.items():
+            row_idx = table.InsertNextBlankRow()
+            table.SetValue(row_idx, 0, vtk.vtkVariant(feature_name))
+            table.SetValue(row_idx, 1, vtk.vtkVariant(float(value)))
+
+        tableNode.Modified()
+        return features
 
 #
 # PulmoVisionTest
@@ -387,6 +465,7 @@ class PulmoVisionTest(ScriptedLoadableModuleTest):
         - Output volume geometry matches input.
         - Output contains a binary mask (values in {0, 1}).
         - There is at least one foreground voxel.
+        - Radiomics table is populated with summary metrics
         """
 
         self.delayDisplay("Starting PulmoVision1 test")
@@ -394,48 +473,52 @@ class PulmoVisionTest(ScriptedLoadableModuleTest):
         import SampleData
         import numpy as np
 
-        # Load sample CT
         registerSampleData()
         inputVolume = SampleData.downloadSample("PulmoVision1")
         self.delayDisplay("Loaded PulmoVision1 test data set")
 
-        # Create output volume node
         outputVolume = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLScalarVolumeNode")
         outputVolume.SetName("PulmoVisionTestOutput")
+        featureTable = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLTableNode")
+        featureTable.SetName("PulmoVisionTestFeatures")
 
-        # Run the module logic (threshold params are ignored by our pipeline)
         logic = PulmoVisionLogic()
-        logic.process(
-            inputVolume=inputVolume,
-            outputVolume=outputVolume,
-            imageThreshold=100.0,
-            invert=False,
-            showResult=False,
-        )
+        parameterNode = logic.getParameterNode()
+        parameterNode.inputVolume = inputVolume
+        parameterNode.outputMaskVolume = outputVolume
+        parameterNode.outputFeatureTable = featureTable
+        parameterNode.segmentationMethod = "percentile"
+        parameterNode.segmentationPercentile = 99.0
+        parameterNode.postprocessEnabled = True
 
-        # Get numpy arrays
+        results = logic.process(parameterNode=parameterNode, showResult=False)
+
         inputArray = slicer.util.arrayFromVolume(inputVolume)
         outputArray = slicer.util.arrayFromVolume(outputVolume)
 
-        # 1) Shape check: D,H,W must match
         self.assertEqual(
             inputArray.shape,
             outputArray.shape,
             msg=f"Output shape {outputArray.shape} does not match input shape {inputArray.shape}",
         )
 
-        # 2) Value check: output should be binary (0/1)
         unique_vals = np.unique(outputArray)
         self.assertTrue(
             np.all(np.isin(unique_vals, [0.0, 1.0])),
             msg=f"Output volume has non-binary values: {unique_vals}",
         )
 
-        # 3) Sanity: at least one foreground voxel
         self.assertGreater(
             np.count_nonzero(outputArray),
             0,
             msg="Output mask is entirely empty (no foreground voxels).",
         )
+
+        # Radiomics table should contain feature rows and match returned dict
+        table = featureTable.GetTable()
+        self.assertGreater(table.GetNumberOfRows(), 0, msg="Feature table is empty")
+        returned_features = results["features"] or {}
+        for feature_name in ["Voxels", "Volume (mm^3)", "Mean HU"]:
+            self.assertIn(feature_name, returned_features)
 
         self.delayDisplay("PulmoVision1 test passed")
