@@ -6,28 +6,28 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>325</width>
-    <height>311</height>
+    <width>420</width>
+    <height>680</height>
    </rect>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
     <widget class="ctkCollapsibleButton" name="inputsCollapsibleButton">
      <property name="text">
-      <string>Inputs</string>
+      <string>Inputs &amp; CT Windowing</string>
      </property>
-     <layout class="QFormLayout" name="formLayout_2">
+     <layout class="QFormLayout" name="formLayoutInputs">
       <item row="0" column="0">
-       <widget class="QLabel" name="label">
+       <widget class="QLabel" name="inputLabel">
         <property name="text">
-         <string>Input volume:</string>
+         <string>Input CT volume:</string>
         </property>
        </widget>
       </item>
       <item row="0" column="1">
        <widget class="qMRMLNodeComboBox" name="inputSelector">
         <property name="toolTip">
-         <string>Pick the input to the algorithm.</string>
+         <string>Pick the CT volume to process.</string>
         </property>
         <property name="nodeTypes">
          <stringlist notr="true">
@@ -48,32 +48,215 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="0">
-       <widget class="QLabel" name="label_3">
+      <item row="1" column="0">
+       <widget class="QLabel" name="windowCenterLabel">
         <property name="text">
-         <string>Image threshold:</string>
+         <string>Window center (HU):</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="ctkSliderWidget" name="windowCenterSlider">
+        <property name="toolTip">
+         <string>CT window center (level) applied before segmentation.</string>
+        </property>
+        <property name="minimum">
+         <double>-1200.000000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>400.000000000000000</double>
+        </property>
+        <property name="value">
+         <double>-600.000000000000000</double>
+        </property>
+        <property name="singleStep">
+         <double>10.000000000000000</double>
+        </property>
+        <property name="SlicerParameterName" stdset="0">
+         <string>windowCenter</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="windowWidthLabel">
+        <property name="text">
+         <string>Window width (HU):</string>
         </property>
        </widget>
       </item>
       <item row="2" column="1">
-       <widget class="ctkSliderWidget" name="imageThresholdSliderWidget">
+       <widget class="ctkSliderWidget" name="windowWidthSlider">
         <property name="toolTip">
-         <string>Set threshold value for computing the output image. Voxels that have intensities lower than this value will set to zero.</string>
-        </property>
-        <property name="singleStep">
-         <double>0.100000000000000</double>
+         <string>CT window width applied before segmentation.</string>
         </property>
         <property name="minimum">
-         <double>-100.000000000000000</double>
+         <double>100.000000000000000</double>
         </property>
         <property name="maximum">
-         <double>500.000000000000000</double>
+         <double>4000.000000000000000</double>
         </property>
         <property name="value">
+         <double>1500.000000000000000</double>
+        </property>
+        <property name="singleStep">
+         <double>25.000000000000000</double>
+        </property>
+        <property name="SlicerParameterName" stdset="0">
+         <string>windowWidth</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="ctkCollapsibleButton" name="segmentationCollapsibleButton">
+     <property name="text">
+      <string>Segmentation</string>
+     </property>
+     <layout class="QFormLayout" name="formLayoutSegmentation">
+      <item row="0" column="0">
+       <widget class="QLabel" name="methodLabel">
+        <property name="text">
+         <string>Method:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="segmentationMethodComboBox">
+        <property name="toolTip">
+         <string>Select which backend segmentation method to run.</string>
+        </property>
+        <item>
+         <property name="text">
+          <string>percentile</string>
+         </property>
+        </item>
+        <item>
+         <property name="text">
+          <string>unet3d</string>
+         </property>
+        </item>
+        <property name="SlicerParameterName" stdset="0">
+         <string>segmentationMethod</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="percentileLabel">
+        <property name="text">
+         <string>Percentile threshold:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="ctkSliderWidget" name="percentileSlider">
+        <property name="toolTip">
+         <string>Percentile used by the lightweight threshold segmentation.</string>
+        </property>
+        <property name="minimum">
+         <double>80.000000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>100.000000000000000</double>
+        </property>
+        <property name="value">
+         <double>99.000000000000000</double>
+        </property>
+        <property name="singleStep">
          <double>0.500000000000000</double>
         </property>
         <property name="SlicerParameterName" stdset="0">
-         <string>imageThreshold</string>
+         <string>segmentationPercentile</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="weightsPathLabel">
+        <property name="text">
+         <string>UNet weights (.pth):</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="ctkPathLineEdit" name="weightsPathLineEdit">
+        <property name="toolTip">
+         <string>Optional path to a UNet3D checkpoint.</string>
+        </property>
+        <property name="filters">
+         <set>QDir::Files</set>
+        </property>
+        <property name="SlicerParameterName" stdset="0">
+         <string>segmentationWeightsPath</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="ctkCollapsibleButton" name="postprocessCollapsibleButton">
+     <property name="text">
+      <string>Postprocessing</string>
+     </property>
+     <layout class="QFormLayout" name="formLayoutPostprocess">
+      <item row="0" column="0">
+       <widget class="QLabel" name="enablePostLabel">
+        <property name="text">
+         <string>Enable postprocessing:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QCheckBox" name="enablePostprocessingCheckBox">
+        <property name="toolTip">
+         <string>Apply binary cleanup and optional component filtering.</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+        <property name="SlicerParameterName" stdset="0">
+         <string>postprocessEnabled</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="largestComponentLabel">
+        <property name="text">
+         <string>Keep largest component:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QCheckBox" name="keepLargestCheckBox">
+        <property name="toolTip">
+         <string>When enabled, only the largest connected component is kept (placeholder).</string>
+        </property>
+        <property name="SlicerParameterName" stdset="0">
+         <string>keepLargestComponent</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="minSizeLabel">
+        <property name="text">
+         <string>Min component size (voxels):</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QSpinBox" name="minSizeSpinBox">
+        <property name="minimum">
+         <number>0</number>
+        </property>
+        <property name="maximum">
+         <number>1000000</number>
+        </property>
+        <property name="value">
+         <number>0</number>
+        </property>
+        <property name="SlicerParameterName" stdset="0">
+         <string>minComponentSize</string>
         </property>
        </widget>
       </item>
@@ -85,18 +268,18 @@
      <property name="text">
       <string>Outputs</string>
      </property>
-     <layout class="QFormLayout" name="formLayout_4">
+     <layout class="QFormLayout" name="formLayoutOutputs">
       <item row="0" column="0">
-       <widget class="QLabel" name="label_2">
+       <widget class="QLabel" name="maskOutputLabel">
         <property name="text">
-         <string>Thresholded volume:</string>
+         <string>Mask volume:</string>
         </property>
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="qMRMLNodeComboBox" name="outputSelector">
+       <widget class="qMRMLNodeComboBox" name="outputMaskSelector">
         <property name="toolTip">
-         <string>Pick the output to the algorithm.</string>
+         <string>Destination for the segmentation mask.</string>
         </property>
         <property name="nodeTypes">
          <stringlist notr="true">
@@ -116,25 +299,25 @@
          <bool>true</bool>
         </property>
         <property name="SlicerParameterName" stdset="0">
-         <string>thresholdedVolume</string>
+         <string>outputMaskVolume</string>
         </property>
        </widget>
       </item>
       <item row="1" column="0">
-       <widget class="QLabel" name="label_5">
+       <widget class="QLabel" name="radiomicsTableLabel">
         <property name="text">
-         <string>Inverted volume:</string>
+         <string>Radiomics table:</string>
         </property>
        </widget>
       </item>
       <item row="1" column="1">
-       <widget class="qMRMLNodeComboBox" name="invertedOutputSelector">
+       <widget class="qMRMLNodeComboBox" name="featureTableSelector">
         <property name="toolTip">
-         <string>Result with inverted threshold will be written into this volume</string>
+         <string>Table node that will store computed radiomic features.</string>
         </property>
         <property name="nodeTypes">
          <stringlist notr="true">
-          <string>vtkMRMLScalarVolumeNode</string>
+          <string>vtkMRMLTableNode</string>
          </stringlist>
         </property>
         <property name="showChildNodeTypes">
@@ -150,7 +333,7 @@
          <bool>true</bool>
         </property>
         <property name="SlicerParameterName" stdset="0">
-         <string>invertedVolume</string>
+         <string>outputFeatureTable</string>
         </property>
        </widget>
       </item>
@@ -158,36 +341,15 @@
     </widget>
    </item>
    <item>
-    <widget class="ctkCollapsibleButton" name="advancedCollapsibleButton">
-     <property name="text">
-      <string>Advanced</string>
-     </property>
-     <property name="collapsed">
-      <bool>true</bool>
-     </property>
-     <layout class="QFormLayout" name="formLayout_3">
-      <item row="0" column="0">
-       <widget class="QLabel" name="label_4">
-        <property name="text">
-         <string>Invert threshold: </string>
-        </property>
-       </widget>
-      </item>
-      <item row="0" column="1">
-       <widget class="QCheckBox" name="invertOutputCheckBox">
-        <property name="toolTip">
-         <string>If checked, values above threshold are set to 0. If unchecked, values below are set to 0.</string>
-        </property>
-        <property name="text">
-         <string/>
-        </property>
-        <property name="invertThreshold" stdset="0">
-         <string/>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
+    <layout class="QHBoxLayout" name="statusLayout">
+     <item>
+      <widget class="QLabel" name="statusLabel">
+       <property name="text">
+        <string>Ready</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
    <item>
     <widget class="QPushButton" name="applyButton">
@@ -195,10 +357,10 @@
       <bool>false</bool>
      </property>
      <property name="toolTip">
-      <string>Run the algorithm.</string>
+      <string>Run the PulmoVision pipeline.</string>
      </property>
      <property name="text">
-      <string>Apply</string>
+      <string>Run PulmoVision</string>
      </property>
     </widget>
    </item>
@@ -240,56 +402,12 @@
    <extends>QWidget</extends>
    <header>ctkSliderWidget.h</header>
   </customwidget>
+  <customwidget>
+   <class>ctkPathLineEdit</class>
+   <extends>QLineEdit</extends>
+   <header>ctkPathLineEdit.h</header>
+  </customwidget>
  </customwidgets>
  <resources/>
- <connections>
-  <connection>
-   <sender>PulmoVision</sender>
-   <signal>mrmlSceneChanged(vtkMRMLScene*)</signal>
-   <receiver>inputSelector</receiver>
-   <slot>setMRMLScene(vtkMRMLScene*)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>122</x>
-     <y>132</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>248</x>
-     <y>61</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>PulmoVision</sender>
-   <signal>mrmlSceneChanged(vtkMRMLScene*)</signal>
-   <receiver>outputSelector</receiver>
-   <slot>setMRMLScene(vtkMRMLScene*)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>82</x>
-     <y>135</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>220</x>
-     <y>161</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>PulmoVision</sender>
-   <signal>mrmlSceneChanged(vtkMRMLScene*)</signal>
-   <receiver>invertedOutputSelector</receiver>
-   <slot>setMRMLScene(vtkMRMLScene*)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>161</x>
-     <y>8</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>173</x>
-     <y>176</y>
-    </hint>
-   </hints>
-  </connection>
- </connections>
+ <connections/>
 </ui>
