@@ -282,37 +282,81 @@ class PulmoVisionLogic(ScriptedLoadableModuleLogic):
                 invert: bool = False,
                 showResult: bool = True) -> None:
         """
-        Run the processing algorithm.
-        Can be used without GUI widget.
-        :param inputVolume: volume to be thresholded
-        :param outputVolume: thresholding result
-        :param imageThreshold: values above/below this threshold will be set to 0
-        :param invert: if True then values above the threshold will be set to 0, otherwise values below are set to 0
-        :param showResult: show output volume in slice viewers
+        Run the PulmoVision pipeline.
+
+        NOTE: imageThreshold and invert are kept in the signature so the
+        existing UI/ParameterNode still work, but they are currently
+        ignored by the backend pipeline. We always run the CT preprocessing
+        + 3D U-Net segmentation + postprocessing.
         """
 
         if not inputVolume or not outputVolume:
             raise ValueError("Input or output volume is invalid")
 
         import time
+        import numpy as np
+        from PulmoBackend.pipeline import run_pulmo_pipeline
 
         startTime = time.time()
-        logging.info("Processing started")
+        logging.info("PulmoVision: processing started")
 
-        # Compute the thresholded output volume using the "Threshold Scalar Volume" CLI module
-        cliParams = {
-            "InputVolume": inputVolume.GetID(),
-            "OutputVolume": outputVolume.GetID(),
-            "ThresholdValue": imageThreshold,
-            "ThresholdType": "Above" if invert else "Below",
-        }
-        cliNode = slicer.cli.run(slicer.modules.thresholdscalarvolume, None, cliParams, wait_for_completion=True, update_display=showResult)
-        # We don't need the CLI module node anymore, remove it to not clutter the scene with it
-        slicer.mrmlScene.RemoveNode(cliNode)
+        #
+        # 1. Slicer volume -> NumPy array (H, W, D)
+        #
+        # Slicer represents scalar volumes as (D, H, W) in numpy.
+        inputArray_DHW = slicer.util.arrayFromVolume(inputVolume)
+        if inputArray_DHW.ndim != 3:
+            raise ValueError(
+                f"Expected 3D volume, got array with shape {inputArray_DHW.shape}"
+            )
+
+        # Backend convention: (H, W, D)
+        volume_HWD = np.transpose(inputArray_DHW, (1, 2, 0)).astype(np.float32)
+
+        #
+        # 2. Run backend pipeline (preprocessing -> UNet3D -> postprocessing)
+        #
+        mask_HWD = run_pulmo_pipeline(
+            volume_HWD,
+            window_center=-600.0,
+            window_width=1500.0,
+            normalize=True,
+            segmentation_method="unet3d",      # use the trained 3D U-Net
+            segmentation_kwargs={},            # later: pass threshold, weights_path, etc.
+            postprocess=True,
+            postprocess_kwargs={},
+            return_intermediates=False,
+        )
+
+        if mask_HWD.shape != volume_HWD.shape:
+            raise RuntimeError(
+                f"PulmoVision pipeline returned mask with shape {mask_HWD.shape}, "
+                f"expected {volume_HWD.shape}"
+            )
+
+        #
+        # 3. NumPy mask -> Slicer volume (D, H, W)
+        #
+        mask_DHW = np.transpose(mask_HWD.astype(np.float32), (2, 0, 1))
+
+        # Push data into the output volume node
+        slicer.util.updateVolumeFromArray(outputVolume, mask_DHW)
+
+        # Copy geometry (spacing, origin, directions) from input volume
+        slicer.modules.volumes.logic().CloneVolumeGeometry(inputVolume, outputVolume)
+
+        #
+        # 4. Optional: show result as overlay
+        #
+        if showResult:
+            slicer.util.setSliceViewerLayers(
+                background=inputVolume,
+                foreground=outputVolume,
+                foregroundOpacity=0.5,
+            )
 
         stopTime = time.time()
-        logging.info(f"Processing completed in {stopTime-startTime:.2f} seconds")
-
+        logging.info(f"PulmoVision: processing completed in {stopTime - startTime:.2f} seconds")
 
 #
 # PulmoVisionTest
