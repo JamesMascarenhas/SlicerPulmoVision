@@ -438,8 +438,6 @@ class PulmoVisionLogic(ScriptedLoadableModuleLogic):
             table.SetValue(row_idx, 1, vtk.vtkVariant(float(value)))
 
         tableNode.Modified()
-        if hasattr(self.ui, "featureTableView"):
-            self.ui.featureTableView.setMRMLTableNode(tableNode)
         return features
 
 #
