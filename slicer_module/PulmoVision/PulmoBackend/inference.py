@@ -11,12 +11,25 @@ values in [0, 1].
 
 import os
 import warnings
-from typing import Dict, Optional, Tuple
+from typing import Optional, Dict, Tuple
 
 import numpy as np
-import torch
 
-from .unet3d import UNet3D
+# Optional PyTorch / UNet3D support
+try:
+    import torch  # type: ignore[import-untyped]
+    _TORCH_AVAILABLE = True
+except ImportError:
+    torch = None  # type: ignore[assignment]
+    _TORCH_AVAILABLE = False
+
+if _TORCH_AVAILABLE:
+    try:
+        from .unet3d import UNet3D
+    except Exception:
+        UNet3D = None  # type: ignore[assignment]
+else:
+    UNet3D = None  # type: ignore[assignment]
 
 
 # -------------------------------------------------------------------------
@@ -125,22 +138,33 @@ def load_unet3d_model(
     strict: bool = False,
     seed: int = 0,
     base_channels: Optional[int] = None,
-    state_dict: Optional[Dict[str, torch.Tensor]] = None,
-) -> Tuple[UNet3D, bool]:
+    state_dict: Optional[Dict[str, object]] = None,
+) -> Tuple[object, bool]:
     """
     Load UNet3D with saved weights.
 
     Returns the model and a boolean indicating whether any parameters
     were successfully loaded from the checkpoint.
     """
+    if not _TORCH_AVAILABLE or UNet3D is None:
+        raise RuntimeError(
+            "UNet3D segmentation requires PyTorch, which is not available in this "
+            "Slicer Python environment."
+        )
+
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    # Ensure we have a checkpoint path
     if weights_path is None:
-        weights_path, _ = ensure_default_unet3d_checkpoint(base_channels=base_channels or 2)
+        # This should return a valid path and a metadata dict
+        weights_path, _ = ensure_default_unet3d_checkpoint(
+            base_channels=base_channels or 16
+        )
 
     base_channels_from_ckpt: Optional[int] = None
 
+    # Load checkpoint if caller didn't pass a state_dict directly
     if state_dict is None:
         if not os.path.exists(weights_path):
             raise FileNotFoundError(
@@ -150,11 +174,14 @@ def load_unet3d_model(
 
         checkpoint = torch.load(weights_path, map_location=device)
         if isinstance(checkpoint, dict):
-            base_channels_from_ckpt = checkpoint.get("base_channels")
+            base_channels_from_ckpt = checkpoint.get("meta", {}).get(
+                "base_channels", checkpoint.get("base_channels")
+            )
             state_dict = checkpoint.get("state_dict", checkpoint)
         else:
             state_dict = checkpoint
 
+    # If base_channels not explicitly given, try from checkpoint, else default 16
     if base_channels is None:
         base_channels = int(base_channels_from_ckpt) if base_channels_from_ckpt else 16
 
@@ -162,7 +189,9 @@ def load_unet3d_model(
     model = UNet3D(in_channels=1, out_channels=1, base_channels=base_channels)
 
     if not isinstance(state_dict, dict) or len(state_dict) == 0:
-        raise ValueError(f"Checkpoint at {weights_path} does not contain model parameters")
+        raise ValueError(
+            f"Checkpoint at {weights_path} does not contain model parameters"
+        )
 
     missing, unexpected = model.load_state_dict(state_dict, strict=strict)
     if missing:
@@ -177,6 +206,7 @@ def load_unet3d_model(
 
     model.to(device)
     model.eval()
+
     loaded_any = len(state_dict) > 0 and len(missing) < len(model.state_dict())
     return model, loaded_any
 
@@ -234,7 +264,7 @@ def run_unet3d_segmentation(
     volume: np.ndarray,
     *,
     weights_path: Optional[str] = None,
-    model: Optional[UNet3D] = None,
+    model: Optional[object] = None,
     device: Optional[str] = None,
     threshold: float = 0.5,
     seed: int = 0,
