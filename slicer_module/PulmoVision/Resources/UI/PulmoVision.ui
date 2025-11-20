@@ -128,15 +128,20 @@
          <string>Select which backend segmentation method to run.</string>
         </property>
         <item>
-         <property name="text">
-          <string>percentile</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>unet3d</string>
-         </property>
-        </item>
+            <property name="text">
+                <string>auto</string>
+            </property>
+            </item>
+            <item>
+            <property name="text">
+                <string>percentile</string>
+            </property>
+            </item>
+            <item>
+            <property name="text">
+                <string>unet3d</string>
+            </property>
+            </item>
         <property name="SlicerParameterName" stdset="0">
          <string>segmentationMethod</string>
         </property>

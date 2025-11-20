@@ -10,7 +10,8 @@ values in [0, 1].
 """
 
 import os
-from typing import Optional
+import warnings
+from typing import Optional, Tuple
 
 import numpy as np
 import torch
@@ -73,9 +74,15 @@ def get_default_unet3d_checkpoint_path() -> str:
 def load_unet3d_model(
     weights_path: Optional[str] = None,
     device: Optional[str] = None,
-) -> UNet3D:
+    *,
+    strict: bool = False,
+    seed: int = 0,
+) -> Tuple[UNet3D, bool]:
     """
     Load UNet3D with saved weights.
+
+    Returns the model and a boolean indicating whether any parameters
+    were successfully loaded from the checkpoint.
     """
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -89,12 +96,30 @@ def load_unet3d_model(
             f"Train the model first via PulmoBackend.training."
         )
 
+    torch.manual_seed(seed)
     model = UNet3D(in_channels=1, out_channels=1, base_channels=16)
-    state_dict = torch.load(weights_path, map_location=device)
-    model.load_state_dict(state_dict)
+    
+    checkpoint = torch.load(weights_path, map_location=device)
+    state_dict = checkpoint.get("state_dict", checkpoint) if isinstance(checkpoint, dict) else checkpoint
+
+    if not isinstance(state_dict, dict) or len(state_dict) == 0:
+        raise ValueError(f"Checkpoint at {weights_path} does not contain model parameters")
+
+    missing, unexpected = model.load_state_dict(state_dict, strict=strict)
+    if missing:
+        warnings.warn(
+            f"Missing parameters when loading UNet3D checkpoint: {missing}. "
+            "Model will use default initialization for those layers.",
+        )
+    if unexpected:
+        warnings.warn(
+            f"Unexpected parameters in UNet3D checkpoint: {unexpected}. They were ignored."
+        )
+
     model.to(device)
     model.eval()
-    return model
+    loaded_any = len(state_dict) > 0 and len(missing) < len(state_dict)
+    return model, loaded_any
 
 
 def run_unet3d_segmentation(
@@ -103,6 +128,7 @@ def run_unet3d_segmentation(
     weights_path: Optional[str] = None,
     device: Optional[str] = None,
     threshold: float = 0.5,
+    seed: int = 0,
 ) -> np.ndarray:
     """
     Run UNet3D-based segmentation on a preprocessed CT volume.
@@ -122,7 +148,7 @@ def run_unet3d_segmentation(
     if volume.ndim != 3:
         raise ValueError(f"Expected volume of shape (H, W, D), got {volume.shape}")
 
-    model = load_unet3d_model(weights_path=weights_path, device=device)
+    model, _ = load_unet3d_model(weights_path=weights_path, device=device, seed=seed, strict=False)
 
     # Normalize volume to [0, 1] if needed
     v = volume.astype(np.float32)
@@ -175,11 +201,30 @@ def run_placeholder_segmentation(
     mask : np.ndarray
         Binary segmentation mask, same shape as input, dtype uint8.
     """
-    method = method.lower()
+    method = (method or "").lower().strip() or "auto"
+    percentile = float(kwargs.pop("percentile", 99.0))
 
     if method == "percentile":
-        return percentile_threshold_segmentation(volume, **kwargs)
-    elif method == "unet3d":
-        return run_unet3d_segmentation(volume, **kwargs)
-    else:
-        raise ValueError(f"Unsupported segmentation method: {method!r}")
+        return percentile_threshold_segmentation(volume, percentile=percentile)
+    
+    if method in {"unet3d", "auto"}:
+        # Decide whether weights look usable
+        weights_path = kwargs.get("weights_path") or get_default_unet3d_checkpoint_path()
+        weights_available = os.path.exists(weights_path)
+
+        if weights_available:
+            try:
+                return run_unet3d_segmentation(volume, **kwargs)
+            except (FileNotFoundError, ValueError) as exc:
+                warnings.warn(
+                    f"UNet3D segmentation unavailable ({exc}). Falling back to percentile heuristic.",
+                )
+
+        if method == "unet3d":
+            warnings.warn(
+                "UNet3D was requested but usable weights were not found; using percentile segmentation instead."
+            )
+
+        return percentile_threshold_segmentation(volume, percentile=percentile)
+
+    raise ValueError(f"Unsupported segmentation method: {method!r}")

@@ -112,9 +112,11 @@ class PulmoVisionParameterNode:
 
     inputVolume - CT input volume
     windowCenter/windowWidth - CT windowing parameters forwarded to the backend
-    segmentationMethod - Backend segmentation algoirthm (percentile or unet3d)
+    segmentationMethod - Backend segmentation algoirthm (percentile, unet3d, or auto)
     segmentationPercentile - Percent threshold used by the lightweight method
     segmentationWeightsPath - Optional path to a UNet3D checkpoint file
+    segmentationDevice - Compute device hint for UNet3D inference
+    segmentationThreshold - Binarization threshold for UNet3D output probabilities
     postprocessEnabled - Toggle cleanup stage
     keepLargestComponent/minComponentSize - Postprocessing hints (placeholder in v1)
     outputMaskVolume - Segmentation mask destination
@@ -124,9 +126,11 @@ class PulmoVisionParameterNode:
     inputVolume: vtkMRMLScalarVolumeNode
     windowCenter: float = -600.0
     windowWidth: float = 1500.0
-    segmentationMethod: str = "percentile"
+    segmentationMethod: str = "auto"
     segmentationPercentile: Annotated[float, WithinRange(80.0, 100.0)] = 99.0
-    segmentationWedightsPath: Optional[str] = ""
+    segmentationWeightsPath: Optional[str] = ""
+    segmentationDevice: str = ""
+    segmentationThreshold: Annotated[float, WithinRange(0.0, 1.0)] = 0.5
     postprocessEnabled: bool = True
     keepLargestComponent: bool = False
     minComponentSize: int = 0
@@ -333,9 +337,17 @@ class PulmoVisionLogic(ScriptedLoadableModuleLogic):
             segmentation_method = "percentile"
         elif "unet3d" in segmentation_method:
             seg_kwargs["weights_path"] = parameterNode.segmentationWeightsPath or None
+            seg_kwargs["device"] = parameterNode.segmentationDevice or None
+            seg_kwargs["threshold"] = float(parameterNode.segmentationThreshold)
             segmentation_method = "unet3d"
-        elif not segmentation_method:
-            segmentation_method = "percentile"
+        elif not segmentation_method or "auto" in segmentation_method:
+            segmentation_method = "auto"
+            seg_kwargs = {
+                "weights_path": parameterNode.segmentationWeightsPath or None,
+                "device": parameterNode.segmentationDevice or None,
+                "threshold": float(parameterNode.segmentationThreshold),
+                "percentile": float(parameterNode.segmentationPercentile),
+            }
 
         post_kwargs = {
             "keep_largest_component": bool(parameterNode.keepLargestComponent),
@@ -487,7 +499,7 @@ class PulmoVisionTest(ScriptedLoadableModuleTest):
         parameterNode.inputVolume = inputVolume
         parameterNode.outputMaskVolume = outputVolume
         parameterNode.outputFeatureTable = featureTable
-        parameterNode.segmentationMethod = "percentile"
+        parameterNode.segmentationMethod = "auto"
         parameterNode.segmentationPercentile = 99.0
         parameterNode.postprocessEnabled = True
 

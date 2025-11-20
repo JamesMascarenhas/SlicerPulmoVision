@@ -3,7 +3,8 @@
 import os
 import math
 import random
-from typing import Tuple
+import pickle
+from typing import Optional, Tuple
 
 import numpy as np
 import torch
@@ -163,6 +164,34 @@ def train_unet3d(
 
     torch.save(model.state_dict(), save_path)
     print(f"Saved UNet3D weights to: {save_path}")
+
+
+def generate_stub_checkpoint(save_path: Optional[str] = None) -> str:
+    """
+    Write a tiny placeholder checkpoint for offline environments.
+
+    This keeps the expected file in place so the backend can gracefully
+    fall back to percentile segmentation when trained weights are absent.
+    """
+    if save_path is None:
+        base_dir = os.path.dirname(__file__)
+        ckpt_dir = os.path.join(base_dir, "checkpoints")
+        os.makedirs(ckpt_dir, exist_ok=True)
+        save_path = os.path.join(ckpt_dir, "unet3d_synthetic.pth")
+
+    checkpoint = {
+        "state_dict": {},
+        "meta": {
+            "description": "Placeholder checkpoint generated without training",
+            "source": "generate_stub_checkpoint",
+        },
+    }
+
+    with open(save_path, "wb") as f:
+        pickle.dump(checkpoint, f)
+
+    print(f"Saved stub UNet3D checkpoint to: {save_path}")
+    return save_path
 
 
 if __name__ == "__main__":
