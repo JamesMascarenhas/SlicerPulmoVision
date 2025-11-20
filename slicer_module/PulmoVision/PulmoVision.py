@@ -454,7 +454,7 @@ class PulmoVisionLogic(ScriptedLoadableModuleLogic):
         mask_DHW = np.transpose(mask_HWD.astype(np.float32), (2, 0, 1))
 
         slicer.util.updateVolumeFromArray(outputMaskVolume, mask_DHW)
-        slicer.modules.volumes.logic().CloneVolumeGeometry(inputVolume, outputMaskVolume)
+        self._copyVolumeGeometry(inputVolume, outputMaskVolume)
 
         if showResult:
             slicer.util.setSliceViewerLayers(
@@ -500,6 +500,16 @@ class PulmoVisionLogic(ScriptedLoadableModuleLogic):
                 "\n".join(dict.fromkeys(messages)),
                 windowTitle=_("PulmoVision segmentation warning"),
             )
+
+    @staticmethod
+    def _copyVolumeGeometry(sourceVolume, targetVolume):
+        """Copy geometry (origin, spacing, direction) from source to target volume node."""
+        ijkToRas = vtk.vtkMatrix4x4()
+        sourceVolume.GetIJKToRASMatrix(ijkToRas)
+        targetVolume.SetIJKToRASMatrix(ijkToRas)
+
+        targetVolume.SetSpacing(sourceVolume.GetSpacing())
+        targetVolume.SetOrigin(sourceVolume.GetOrigin())
 
     def _updateFeatureTable(self, tableNode, features):
         """Populate a MRML table node with radiomics-style summaries."""
