@@ -5,6 +5,7 @@ from typing import Annotated, Optional
 import vtk
 
 import slicer
+import qt
 from slicer.i18n import tr as _
 from slicer.i18n import translate
 from slicer.ScriptedLoadableModule import *
@@ -191,6 +192,13 @@ class PulmoVisionWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if hasattr(self.ui, "featureTableView"):
             self.ui.featureTableView.setMRMLScene(slicer.mrmlScene)
 
+        self.segmentationInfoLabel = qt.QLabel(_("Segmentation: not run"))
+        self.segmentationInfoLabel.setToolTip(
+            _("Displays which backend ran and which checkpoint path was used for segmentation.")
+        )
+        if hasattr(self.ui, "statusLayout"):
+            self.ui.statusLayout.addWidget(self.segmentationInfoLabel)
+
     def cleanup(self) -> None:
         """Called when the application closes and the module widget is destroyed."""
         self.removeObservers()
@@ -274,14 +282,51 @@ class PulmoVisionWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def onApplyButton(self) -> None:
         """Run processing when user clicks "Apply" button."""
         self.ui.statusLabel.setText(_("Running PulmoVision pipeline…"))
+        result = None
         try:
             with slicer.util.tryWithErrorDisplay(_("PulmoVision processing failed."), waitCursor=True):
-                self.logic.process(self._parameterNode, showResult=True)
+                result = self.logic.process(self._parameterNode, showResult=True)
         except Exception:
             self.ui.statusLabel.setText(_("PulmoVision processing failed"))
             raise
         else:
             self.ui.statusLabel.setText(_("PulmoVision completed successfully"))
+            self._updateSegmentationInfoLabel(result)
+
+    def _updateSegmentationInfoLabel(self, result) -> None:
+        if not hasattr(self, "segmentationInfoLabel") or self.segmentationInfoLabel is None:
+            return
+
+        metadata = None
+        if isinstance(result, dict):
+            metadata = result.get("segmentation_metadata")
+
+        if not metadata:
+            self.segmentationInfoLabel.setText(_("Segmentation: unknown"))
+            self.segmentationInfoLabel.setToolTip(
+                _("No segmentation metadata was returned by the pipeline.")
+            )
+            return
+
+        used_method = metadata.get("used_method") or metadata.get("requested_method") or "?"
+        checkpoint_path = metadata.get("weights_path") or _("Default checkpoint")
+        checkpoint_loaded = metadata.get("checkpoint_loaded")
+        checkpoint_exists = metadata.get("checkpoint_exists")
+
+        self.segmentationInfoLabel.setText(_(f"Segmentation: {used_method}"))
+        tooltip_lines = [
+            _(f"Requested: {metadata.get('requested_method', 'n/a')}")
+            if metadata.get("requested_method")
+            else _("Requested: n/a"),
+            _(f"Checkpoint path: {checkpoint_path}"),
+            _(
+                f"Checkpoint status: {'available' if checkpoint_exists else 'missing'}; "
+                f"{'loaded' if checkpoint_loaded else 'not loaded'}"
+            ),
+        ]
+        if metadata.get("messages"):
+            tooltip_lines.append("\n".join(metadata["messages"]))
+        self.segmentationInfoLabel.setToolTip("\n".join(tooltip_lines))
 
 
 # 
@@ -374,6 +419,7 @@ class PulmoVisionLogic(ScriptedLoadableModuleLogic):
             normalize=True,
             segmentation_method=segmentation_method,
             segmentation_kwargs=seg_kwargs,
+            return_metadata=True,
             postprocess=bool(parameterNode.postprocessEnabled),
             postprocess_kwargs=post_kwargs,
             return_intermediates=False,
@@ -381,9 +427,11 @@ class PulmoVisionLogic(ScriptedLoadableModuleLogic):
             voxel_spacing=voxel_spacing_hwd,
         )
 
-        if parameterNode.radiomicsEnabled:
-            mask_HWD = pipeline_result["mask"]
-            features = pipeline_result.get("features") or {}
+        segmentation_metadata = None
+        if isinstance(pipeline_result, dict):
+            mask_HWD = pipeline_result.get("mask")
+            features = pipeline_result.get("features") if parameterNode.radiomicsEnabled else None
+            segmentation_metadata = pipeline_result.get("segmentation_metadata")
         else:
             mask_HWD = pipeline_result
             features = None
@@ -411,11 +459,38 @@ class PulmoVisionLogic(ScriptedLoadableModuleLogic):
             feature_results = self._updateFeatureTable(
                  parameterNode.outputFeatureTable, features or {}
             )
-    
+
+        self._displaySegmentationWarnings(segmentation_metadata)
+
         stopTime = time.time()
         logging.info(f"PulmoVision: processing completed in {stopTime - startTime:.2f} seconds")
 
-        return {"mask": mask_DHW, "features": feature_results}
+        return {
+            "mask": mask_DHW,
+            "features": feature_results,
+            "segmentation_metadata": segmentation_metadata,
+        }
+
+    def _displaySegmentationWarnings(self, segmentation_metadata):
+        if not segmentation_metadata:
+            return
+
+        requested = segmentation_metadata.get("requested_method")
+        used = segmentation_metadata.get("used_method") or requested
+        messages = list(segmentation_metadata.get("messages") or [])
+
+        if requested and used and requested != used:
+            messages.append(
+                _(
+                    f"Segmentation method '{requested}' fell back to '{used}'. Checkpoints may be missing or unusable."
+                )
+            )
+
+        if messages:
+            slicer.util.warningDisplay(
+                "\n".join(dict.fromkeys(messages)),
+                windowTitle=_("PulmoVision segmentation warning"),
+            )
 
     def _updateFeatureTable(self, tableNode, features):
         """Populate a MRML table node with radiomics-style summaries."""
