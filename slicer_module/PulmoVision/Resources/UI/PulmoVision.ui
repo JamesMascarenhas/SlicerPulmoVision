@@ -176,26 +176,6 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="0">
-       <widget class="QLabel" name="weightsPathLabel">
-        <property name="text">
-         <string>UNet weights (.pth):</string>
-        </property>
-       </widget>
-      </item>
-      <item row="2" column="1">
-       <widget class="ctkPathLineEdit" name="weightsPathLineEdit">
-        <property name="toolTip">
-         <string>Optional path to a UNet3D checkpoint.</string>
-        </property>
-        <property name="filters">
-         <set>QDir::Files</set>
-        </property>
-        <property name="SlicerParameterName" stdset="0">
-         <string>segmentationWeightsPath</string>
-        </property>
-       </widget>
-      </item>
      </layout>
     </widget>
    </item>

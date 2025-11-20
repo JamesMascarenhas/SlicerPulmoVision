@@ -13,6 +13,7 @@ from slicer.util import VTKObservationMixin
 from slicer.parameterNodeWrapper import (
     parameterNodeWrapper,
     WithinRange,
+    Choice,
 )
 
 from slicer import vtkMRMLScalarVolumeNode, vtkMRMLTableNode 
@@ -125,11 +126,10 @@ class PulmoVisionParameterNode:
     """
 
     inputVolume: vtkMRMLScalarVolumeNode
-    windowCenter: float = -600.0
-    windowWidth: float = 1500.0
-    segmentationMethod: str = "auto"
+    windowCenter: Annotated[float, WithinRange(-1200.0, 400.0)] = -600.0
+    windowWidth: Annotated[float, WithinRange(100.0, 4000.0)] = 1500.0
+    segmentationMethod: Annotated[str, Choice(["auto", "percentile", "unet3d"])] = "auto"
     segmentationPercentile: Annotated[float, WithinRange(80.0, 100.0)] = 99.0
-    segmentationWeightsPath: Optional[str] = ""
     segmentationDevice: str = ""
     segmentationThreshold: Annotated[float, WithinRange(0.0, 1.0)] = 0.5
     postprocessEnabled: bool = True
@@ -387,18 +387,19 @@ class PulmoVisionLogic(ScriptedLoadableModuleLogic):
 
         segmentation_method = parameterNode.segmentationMethod.lower().strip()
         seg_kwargs = {}
+
         if "percentile" in segmentation_method:
             seg_kwargs["percentile"] = float(parameterNode.segmentationPercentile)
             segmentation_method = "percentile"
+
         elif "unet3d" in segmentation_method:
-            seg_kwargs["weights_path"] = parameterNode.segmentationWeightsPath or None
             seg_kwargs["device"] = parameterNode.segmentationDevice or None
             seg_kwargs["threshold"] = float(parameterNode.segmentationThreshold)
             segmentation_method = "unet3d"
+
         elif not segmentation_method or "auto" in segmentation_method:
             segmentation_method = "auto"
             seg_kwargs = {
-                "weights_path": parameterNode.segmentationWeightsPath or None,
                 "device": parameterNode.segmentationDevice or None,
                 "threshold": float(parameterNode.segmentationThreshold),
                 "percentile": float(parameterNode.segmentationPercentile),
