@@ -98,11 +98,11 @@ def ensure_default_unet3d_checkpoint(base_channels: int = 2) -> Tuple[str, bool]
     
     if not _TORCH_AVAILABLE:
         raise RuntimeError(
-            "PyTorch is required to create the synthetic UNet3D checkpoint. "
-            "Install torch inside Slicer (Python Interactor):\n"
-            "    slicer.util.pip_install(\"torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu\")\n"
-            "and restart Slicer before running UNet3D segmentation."
-        )
+             "UNet3D requires PyTorch, which is not installed in this Slicer environment."
+            "To enable UNet3D segmentation, install the official 'PyTorch' extension from:"
+            "  Slicer → View → Extensions Manager → Search: PyTorch → Install"
+            "Then restart Slicer and try again."
+        )   
 
     ckpt_dir = os.path.dirname(weights_path)
     os.makedirs(ckpt_dir, exist_ok=True)
@@ -156,10 +156,10 @@ def load_unet3d_model(
     """
     if not _TORCH_AVAILABLE or UNet3D is None:
         raise RuntimeError(
-            "UNet3D segmentation requires PyTorch, which is not available in this "
-            "Slicer Python environment. Install torch inside Slicer (Python Interactor):\n"
-            "    slicer.util.pip_install(\"torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu\")\n"
-            "and restart Slicer before running UNet3D segmentation."
+            "UNet3D segmentation requires PyTorch. It is not currently available."
+            "Install the official 'PyTorch' extension via the Slicer Extensions Manager:"
+            "  View → Extensions Manager → PyTorch → Install"
+            "Restart Slicer afterward."
         )
 
     if device is None:
@@ -384,9 +384,10 @@ def run_placeholder_segmentation(
     if method in {"unet3d", "auto"}:
         if not torch_ready:
             metadata["messages"].append(
-                "UNet3D segmentation requires PyTorch. Install it via the Slicer Python Interactor:\n"
-                "    slicer.util.pip_install(\"torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu\")\n"
-                "Restart Slicer afterward to enable the 'unet3d' and 'auto' methods."
+                "UNet3D segmentation unavailable: PyTorch is not installed."
+                "Install the official 'PyTorch' extension using Slicer's Extensions Manager:"
+                "  View → Extensions Manager → Search 'PyTorch' → Install"
+                "After installing and restarting Slicer, UNet3D and auto segmentation will be enabled."
             )
             metadata["used_method"] = "percentile"
             mask = percentile_threshold_segmentation(volume, percentile=percentile)
