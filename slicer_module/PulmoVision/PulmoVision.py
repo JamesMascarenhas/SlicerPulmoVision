@@ -294,7 +294,12 @@ class PulmoVisionWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 self.ui.featureTableView.setMRMLTableNode(self._parameterNode.outputFeatureTable)
 
     def _checkCanApply(self, caller=None, event=None) -> None:
-        if self._parameterNode and self._parameterNode.inputVolume and self._parameterNode.outputMaskVolume:
+        has_input_data = False
+        if self._parameterNode and self._parameterNode.inputVolume:
+            input_image_data = self._parameterNode.inputVolume.GetImageData()
+            has_input_data = input_image_data is not None
+
+        if self._parameterNode and has_input_data and self._parameterNode.outputMaskVolume:
             self.ui.applyButton.toolTip = _("Run PulmoVision segmentation and radiomics")
             self.ui.applyButton.enabled = True
         else:
