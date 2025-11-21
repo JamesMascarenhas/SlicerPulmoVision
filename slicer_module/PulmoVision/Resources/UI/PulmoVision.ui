@@ -191,7 +191,7 @@ QLabel#statusLabel {
    <item>
     <widget class="ctkCollapsibleButton" name="inputsCollapsibleButton">
      <property name="text">
-      <string>Inputs &amp; CT Windowing</string>
+      <string>Inputs and CT Windowing</string>
      </property>
      <layout class="QFormLayout" name="formLayoutInputs">
       <property name="verticalSpacing">
