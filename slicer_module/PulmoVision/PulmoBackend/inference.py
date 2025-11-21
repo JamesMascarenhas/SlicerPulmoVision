@@ -28,26 +28,8 @@ if _TORCH_AVAILABLE:
         from .unet3d import UNet3D
     except Exception:
         UNet3D = None  # type: ignore[assignment]
-
-    def _torch_has_numpy_support() -> bool:
-        """Return True if torch.from_numpy works in this environment."""
-        try:
-            torch.from_numpy(np.zeros(1, dtype=np.float32))
-            return True
-        except RuntimeError as exc:  # noqa: BLE001 - specific torch error
-            if "Numpy is not available" in str(exc):
-                return False
-            raise
-
-    _TORCH_NUMPY_AVAILABLE = _torch_has_numpy_support()
-    if not _TORCH_NUMPY_AVAILABLE:
-        warnings.warn(
-            "PyTorch is missing NumPy support; using slower tensor construction.",
-            RuntimeWarning,
-        )
 else:
     UNet3D = None  # type: ignore[assignment]
-    _TORCH_NUMPY_AVAILABLE = False
 
 
 # -------------------------------------------------------------------------
@@ -330,18 +312,15 @@ def run_unet3d_segmentation(
     # Our convention in the backend: volume is H x W x D.
     # PyTorch expects N x C x D x H x W.
     v_dhw = np.transpose(v, (2, 0, 1))  # D,H,W
-    if _TORCH_NUMPY_AVAILABLE:
-        v_tensor = torch.from_numpy(v_dhw)[None, None, ...]  # 1,1,D,H,W
-    else:
-        v_tensor = torch.tensor(v_dhw.tolist())[None, None, ...]
-        
+    # Always use list-based construction because Slicer’s PyTorch lacks NumPy support
+    v_tensor = torch.tensor(v_dhw.tolist(), dtype=torch.float32)[None, None, ...]  # 1,1,D,H,W
     v_tensor = v_tensor.to(device)
 
     with torch.no_grad():
         logits = model(v_tensor)
         prob = torch.sigmoid(logits)
 
-    prob_np = prob.cpu().numpy()[0, 0]  # D,H,W
+    prob_np = np.array(prob.cpu().tolist(), dtype=np.float32)[0, 0]  # D,H,W
     prob_hwd = np.transpose(prob_np, (1, 2, 0))  # back to H,W,D
 
     mask = (prob_hwd >= threshold).astype(np.uint8)
