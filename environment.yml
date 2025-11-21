@@ -16,4 +16,5 @@ dependencies:
   - simpleitk>=2.3
   - pyyaml>=6.0
   - matplotlib>=3.8
+  - pytest>=8.0
   - pip

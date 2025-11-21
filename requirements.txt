@@ -8,3 +8,4 @@ scikit-learn>=1.4
 SimpleITK>=2.3
 pyyaml>=6.0
 matplotlib>=3.8
+pytest>=8.0
