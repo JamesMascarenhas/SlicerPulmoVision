@@ -1,5 +1,6 @@
 # PulmoBackend/training.py
 
+import argparse
 import os
 import random
 from typing import Optional, Tuple
@@ -12,6 +13,12 @@ import torch.optim as optim
 
 from .unet3d import UNet3D
 from .inference import get_default_unet3d_checkpoint_path
+from .msd_lung_dataset import MSDTask06LungDataset, get_default_msd_root
+
+
+JAMES_DATA_ROOT = os.path.abspath(
+    "/Users/jamesmascarenhas/Desktop/courses/881/group_project/Task06_Lung"
+)
 
 
 def create_synthetic_tumor_volume(
@@ -101,6 +108,43 @@ def dice_loss(pred, target, smooth: float = 1.0):
     return 1.0 - (2.0 * intersection + smooth) / (denom + smooth)
 
 
+def _resolve_data_root(data_root: Optional[str], training_on_james: bool = False) -> str:
+    """Resolve where the MSD Task06 dataset should live.
+
+    If ``training_on_james`` is True, the path is forced to James's local
+    dataset location. Otherwise, we honor an explicit ``data_root`` or prompt
+    the user when not provided.
+    """
+
+    if training_on_james:
+        candidate = JAMES_DATA_ROOT
+        if os.path.exists(candidate):
+            return candidate
+        raise FileNotFoundError(
+            f"James-specific dataset path does not exist: {candidate}. Please verify the download."
+        )
+
+    if data_root is None:
+        prompt = input(
+            "Path to MSD Task06 Lung dataset (dataset.json, imagesTr, labelsTr): "
+        ).strip()
+        data_root = prompt or None
+
+    if data_root is not None:
+        candidate = os.path.abspath(data_root)
+        if os.path.exists(candidate):
+            return candidate
+
+    candidate = get_default_msd_root()
+    if os.path.exists(candidate):
+        return candidate
+
+    raise FileNotFoundError(
+        "Please provide data_root or set MSD_LUNG_DATA_ROOT to point to the MSD Task06 data. "
+        f"Expected default location: {candidate}"
+    )
+
+
 def train_unet3d(
     epochs: int = 5,
     batch_size: int = 2,
@@ -169,11 +213,141 @@ def train_unet3d(
     return save_path
 
 
-if __name__ == "__main__":
-    # Example quick run from a regular Python env
-    train_unet3d(
-        epochs=3,
-        batch_size=2,
-        n_samples=40,
+def train_msd_unet3d(
+    data_root: Optional[str] = None,
+    epochs: int = 50,
+    batch_size: int = 1,
+    patch_size: Tuple[int, int, int] = (96, 96, 96),
+    lr: float = 1e-4,
+    num_workers: int = 2,
+    device: str = None,
+    save_path: str = None,
+    augment: bool = True,
+    training_on_james: bool = False,
+):
+    """
+    Train UNet3D on real MSD Task06 Lung data using random 3D patches.
+
+    Args:
+        data_root: Folder containing dataset.json, imagesTr, labelsTr, etc.
+        epochs: Number of epochs to train.
+        batch_size: Training batch size (number of patches).
+        patch_size: Spatial size of extracted 3D patches.
+        lr: Learning rate for Adam optimizer.
+        num_workers: DataLoader workers.
+        device: Override compute device; defaults to CUDA if available.
+        save_path: Optional path to save checkpoint; defaults to inference path.
+        augment: Whether to apply simple random flips.
+        training_on_james: If True, force the dataset path to James's local copy.
+    """
+
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    resolved_root = _resolve_data_root(data_root, training_on_james=training_on_james)
+    if not os.path.exists(resolved_root):
+        raise FileNotFoundError(f"MSD data root does not exist: {resolved_root}")
+
+    if save_path is None:
+        save_path = get_default_unet3d_checkpoint_path()
+        ckpt_dir = os.path.dirname(save_path)
+        os.makedirs(ckpt_dir, exist_ok=True)
+
+    dataset = MSDTask06LungDataset(
+        data_root=str(resolved_root),
+        split="train",
+        patch_size=patch_size,
+        augment=augment,
+    )
+    dataloader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=torch.cuda.is_available(),
     )
 
+    model = UNet3D(in_channels=1, out_channels=1, base_channels=16).to(device)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+    bce = nn.BCEWithLogitsLoss()
+
+    model.train()
+    for epoch in range(epochs):
+        running_loss = 0.0
+        for images, masks in dataloader:
+            images = images.to(device)
+            masks = masks.to(device)
+
+            optimizer.zero_grad()
+            logits = model(images)
+            probs = torch.sigmoid(logits)
+
+            loss_bce = bce(logits, masks)
+            loss_dice = dice_loss(probs, masks)
+            loss = loss_bce + loss_dice
+
+            loss.backward()
+            optimizer.step()
+
+            running_loss += loss.item()
+
+        avg_loss = running_loss / max(1, len(dataloader))
+        print(f"[Epoch {epoch+1}/{epochs}] MSD train loss: {avg_loss:.4f}")
+
+    checkpoint = {
+        "state_dict": model.state_dict(),
+        "base_channels": 16,
+        "note": "Trained UNet3D on MSD Task06 Lung patches",
+    }
+    torch.save(checkpoint, save_path)
+    print(f"Saved UNet3D weights to: {save_path}")
+    return save_path
+
+
+def _parse_args():
+    parser = argparse.ArgumentParser(description="Train UNet3D for lung segmentation")
+    parser.add_argument("--train-msd", action="store_true", help="Train on MSD Task06 Lung instead of synthetic data")
+    parser.add_argument("--data-root", type=str, default=None, help="Path to MSD Task06 Lung dataset root")
+    parser.add_argument("--epochs", type=int, default=5, help="Number of training epochs")
+    parser.add_argument("--batch-size", type=int, default=1, help="Batch size")
+    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
+    parser.add_argument(
+        "--patch-size",
+        type=int,
+        nargs=3,
+        default=[96, 96, 96],
+        help="Patch size used for MSD training (D H W)",
+    )
+    parser.add_argument(
+        "--on-james",
+        action="store_true",
+        help="Use James's hardcoded MSD dataset path instead of prompting",
+    )
+    parser.add_argument("--num-workers", type=int, default=2, help="DataLoader workers")
+    parser.add_argument("--no-augment", action="store_true", help="Disable simple flipping augmentation")
+    parser.add_argument("--output", type=str, default=None, help="Where to save the checkpoint")
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = _parse_args()
+
+    if args.train_msd:
+        train_msd_unet3d(
+            data_root=args.data_root,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            patch_size=tuple(args.patch_size),
+            lr=args.lr,
+            num_workers=args.num_workers,
+            save_path=args.output,
+            augment=not args.no_augment,
+            training_on_james=args.on_james,
+        )
+    else:
+        train_unet3d(
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            lr=args.lr,
+            save_path=args.output,
+        )

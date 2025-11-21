@@ -2,7 +2,10 @@ numpy>=1.26
 scipy>=1.12
 torch>=2.2
 torchvision>=0.17
+tqdm>=4.66
 scikit-image>=0.22
+scikit-learn>=1.4
 SimpleITK>=2.3
+pyyaml>=6.0
+matplotlib>=3.8
 pyradiomics>=3.1
-

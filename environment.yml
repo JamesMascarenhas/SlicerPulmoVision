@@ -1,1 +1,21 @@
 
+name: pulmovision
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python>=3.10
+  - numpy>=1.26
+  - scipy>=1.12
+  - pytorch>=2.2
+  - torchvision>=0.17
+  - tqdm>=4.66
+  - scikit-image>=0.22
+  - scikit-learn>=1.4
+  - simpleitk>=2.3
+  - pyyaml>=6.0
+  - matplotlib>=3.8
+  - pip
+  - pip:
+      - pyradiomics>=3.1
