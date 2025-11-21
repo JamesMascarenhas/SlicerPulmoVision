@@ -12,11 +12,49 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
+    <widget class="QFrame" name="headerFrame">
+     <property name="frameShape">
+      <enum>QFrame::StyledPanel</enum>
+     </property>
+     <property name="frameShadow">
+      <enum>QFrame::Raised</enum>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">QFrame {background: qlineargradient(y1:0, y2:1, stop:0 #f7f9fc, stop:1 #eef2f7); border-radius: 8px; border: 1px solid #d6deeb; padding: 10px;} QLabel#titleLabel {font-size: 18px; font-weight: 600; color: #1f3b57;} QLabel#subtitleLabel {color: #4a5a6a;}</string>
+     </property>
+     <layout class="QVBoxLayout" name="headerLayout">
+      <property name="spacing">
+       <number>4</number>
+      </property>
+      <item>
+       <widget class="QLabel" name="titleLabel">
+        <property name="text">
+         <string>Run an end-to-end lung CT analysis</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="subtitleLabel">
+        <property name="text">
+         <string>Select your inputs, pick a segmentation strategy, and generate a radiomics summary in one click.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
     <widget class="ctkCollapsibleButton" name="inputsCollapsibleButton">
      <property name="text">
       <string>Inputs &amp; CT Windowing</string>
      </property>
      <layout class="QFormLayout" name="formLayoutInputs">
+      <property name="verticalSpacing">
+       <number>12</number>
+      </property>
       <item row="0" column="0">
        <widget class="QLabel" name="inputLabel">
         <property name="text">
@@ -115,6 +153,9 @@
       <string>Segmentation</string>
      </property>
      <layout class="QFormLayout" name="formLayoutSegmentation">
+      <property name="verticalSpacing">
+       <number>12</number>
+      </property>
       <item row="0" column="0">
        <widget class="QLabel" name="methodLabel">
         <property name="text">
@@ -175,11 +216,14 @@
     </widget>
    </item>
    <item>
-    <widget class="ctkCollapsibleButton" name="postprocessCollapsibleButton">
+   <widget class="ctkCollapsibleButton" name="postprocessCollapsibleButton">
      <property name="text">
       <string>Postprocessing</string>
      </property>
      <layout class="QFormLayout" name="formLayoutPostprocess">
+      <property name="verticalSpacing">
+       <number>12</number>
+      </property>
       <item row="0" column="0">
        <widget class="QLabel" name="enablePostLabel">
         <property name="text">
@@ -244,11 +288,14 @@
     </widget>
    </item>
    <item>
-    <widget class="ctkCollapsibleButton" name="outputsCollapsibleButton">
+   <widget class="ctkCollapsibleButton" name="outputsCollapsibleButton">
      <property name="text">
       <string>Outputs</string>
      </property>
      <layout class="QFormLayout" name="formLayoutOutputs">
+      <property name="verticalSpacing">
+       <number>12</number>
+      </property>
       <item row="0" column="0">
        <widget class="QLabel" name="maskOutputLabel">
         <property name="text">
@@ -365,16 +412,19 @@
     </layout>
    </item>
    <item>
-    <widget class="QPushButton" name="applyButton">
-     <property name="enabled">
-      <bool>false</bool>
+   <widget class="QPushButton" name="applyButton">
+    <property name="enabled">
+     <bool>false</bool>
      </property>
-     <property name="toolTip">
-      <string>Run the PulmoVision pipeline.</string>
-     </property>
-     <property name="text">
-      <string>Run PulmoVision</string>
-     </property>
+    <property name="toolTip">
+     <string>Run the PulmoVision pipeline.</string>
+    </property>
+    <property name="styleSheet">
+     <string notr="true">QPushButton {background-color: #2d7dd2; color: white; font-weight: 600; padding: 10px 14px; border-radius: 6px;} QPushButton:pressed {background-color: #1f5fa3;} QPushButton:disabled {background-color: #9bb7d1; color: #eef2f7;}</string>
+    </property>
+    <property name="text">
+     <string>Run PulmoVision</string>
+    </property>
     </widget>
    </item>
    <item>
