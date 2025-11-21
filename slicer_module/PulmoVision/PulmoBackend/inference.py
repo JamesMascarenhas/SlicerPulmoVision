@@ -417,14 +417,19 @@ def run_placeholder_segmentation(
         
         weights_path = kwargs.get("weights_path") or None
         if weights_path is None:
-            try:
-                weights_path, _ = ensure_default_unet3d_checkpoint()
-            except Exception as exc:  # noqa: BLE001 - surface creation issues
-                metadata["weights_path"] = get_default_unet3d_checkpoint_path()
-                metadata["messages"].append(str(exc))
-                weights_path = metadata["weights_path"]
-            else:
+            msd_default = get_default_msd_unet3d_checkpoint_path()
+            if os.path.exists(msd_default):
+                weights_path = msd_default
                 metadata["weights_path"] = weights_path
+            else:
+                try:
+                    weights_path, _ = ensure_default_unet3d_checkpoint()
+                except Exception as exc:  # noqa: BLE001 - surface creation issues
+                    metadata["weights_path"] = get_default_unet3d_checkpoint_path()
+                    metadata["messages"].append(str(exc))
+                    weights_path = metadata["weights_path"]
+                else:
+                    metadata["weights_path"] = weights_path
         else:
             metadata["weights_path"] = weights_path
 
