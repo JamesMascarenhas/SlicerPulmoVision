@@ -126,6 +126,12 @@ def run_pulmo_pipeline(volume,
     else:
         segmentation_kwargs = dict(segmentation_kwargs)
 
+    # Default to a safe HU-threshold fallback when UNet3D is requested.
+    # This keeps the pipeline runnable in environments without PyTorch or
+    # when checkpoints are missing, matching the user-facing help text.
+    if (segmentation_method or "").lower().strip() == "unet3d":
+        segmentation_kwargs.setdefault("allow_hu_threshold_fallback", True)
+        
     # HU-threshold segmentation and UNet fallbacks must operate on HU values.
     hu_volume = vol.astype(np.float32)
 
