@@ -201,6 +201,11 @@ class MSDTask06LungDataset(Dataset):
         if self.normalize:
             image_patch = _normalize_intensity(image_patch, self.clip_range)
 
+        # Ensure contiguous memory layout after flips/crops so torch.from_numpy works
+        image_patch = np.ascontiguousarray(image_patch)
+        if label_patch is not None:
+            label_patch = np.ascontiguousarray(label_patch)
+        
         image_tensor = torch.from_numpy(image_patch[None, ...])  # (1, D, H, W)
         label_tensor = None
         if label_patch is not None:

@@ -134,7 +134,11 @@ def _resolve_data_root(data_root: Optional[str], training_on_james: bool = False
         candidate = os.path.abspath(data_root)
         if os.path.exists(candidate):
             return candidate
-
+        raise FileNotFoundError(
+            "Provided data_root does not exist: "
+            f"{candidate}. Set MSD_LUNG_DATA_ROOT or pass a valid path to --data-root."
+        )
+    
     candidate = get_default_msd_root()
     if os.path.exists(candidate):
         return candidate
