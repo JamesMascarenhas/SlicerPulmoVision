@@ -516,6 +516,7 @@ def run_placeholder_segmentation(
     threshold_hu = float(kwargs.pop("threshold_hu", -300.0))
     device = kwargs.get("device")
     seed = kwargs.get("seed", 0)
+    threshold = float(kwargs.get("threshold", 0.5))
     metadata: Dict[str, object] = {
         "requested_method": method,
         "used_method": None,
@@ -524,6 +525,7 @@ def run_placeholder_segmentation(
         "checkpoint_loaded": False,
         "messages": [],
         "checkpoint_metadata": None,
+        "threshold": threshold,
     }
 
     if method == "hu_threshold":
@@ -590,7 +592,7 @@ def run_placeholder_segmentation(
                     volume,
                     model=model,
                     device=device,
-                    threshold=float(kwargs.get("threshold", 0.5)),
+                    threshold=threshold,
                     seed=seed,
                 )
                 metadata["used_method"] = "unet3d"

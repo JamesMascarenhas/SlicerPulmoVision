@@ -341,8 +341,13 @@ class PulmoVisionWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         checkpoint_path = metadata.get("weights_path") or _("Default checkpoint")
         checkpoint_loaded = metadata.get("checkpoint_loaded")
         checkpoint_exists = metadata.get("checkpoint_exists")
+        threshold = metadata.get("threshold")
 
-        self.segmentationInfoLabel.setText(_(f"Segmentation: {used_method}"))
+        threshold_suffix = ""
+        if used_method and used_method.lower().startswith("unet") and threshold is not None:
+            threshold_suffix = _(f" (threshold={float(threshold):.2f})")
+
+        self.segmentationInfoLabel.setText(_(f"Segmentation: {used_method}{threshold_suffix}"))
         tooltip_lines = [
             _(f"Requested: {metadata.get('requested_method', 'n/a')}")
             if metadata.get("requested_method")
@@ -353,6 +358,8 @@ class PulmoVisionWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 f"{'loaded' if checkpoint_loaded else 'not loaded'}"
             ),
         ]
+        if threshold is not None:
+            tooltip_lines.append(_(f"Probability threshold: {float(threshold):.2f}"))
         if metadata.get("messages"):
             tooltip_lines.append("\n".join(metadata["messages"]))
         self.segmentationInfoLabel.setToolTip("\n".join(tooltip_lines))
