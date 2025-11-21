@@ -23,6 +23,7 @@ conda/
 *.pth
 *.bin
 *.ckpt
+!slicer_module/PulmoVision/PulmoBackend/checkpoints/unet3d_msd.pt
 experiments/model_checkpoints/
 experiments/training_logs/
 
