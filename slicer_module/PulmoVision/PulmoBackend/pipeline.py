@@ -131,7 +131,7 @@ def run_pulmo_pipeline(volume,
     # when checkpoints are missing, matching the user-facing help text.
     if (segmentation_method or "").lower().strip() == "unet3d":
         segmentation_kwargs.setdefault("allow_hu_threshold_fallback", True)
-        
+
     # HU-threshold segmentation and UNet fallbacks must operate on HU values.
     hu_volume = vol.astype(np.float32)
 
@@ -160,6 +160,17 @@ def run_pulmo_pipeline(volume,
     else:
         final_mask = raw_mask
     
+     # Surface a clear message when the segmentation ends up empty; this helps
+    # users understand why radiomics outputs are zero/NaN even though
+    # UNet3D ran without explicit errors.
+    if final_mask.sum() == 0:
+        empty_msg = (
+            "Segmentation mask is empty after postprocessing; radiomics features "
+            "will be zero/NaN unless foreground voxels are present."
+        )
+        if segmentation_metadata is not None:
+            segmentation_metadata.setdefault("messages", []).append(empty_msg)
+            
     features = None
     if compute_features:
         if feature_kwargs is None:

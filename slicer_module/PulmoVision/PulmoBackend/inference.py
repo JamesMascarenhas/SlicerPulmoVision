@@ -458,6 +458,11 @@ def run_unet3d_segmentation(
     prob_np = np.array(prob.cpu().tolist(), dtype=np.float32)[0, 0]  # D,H,W
     prob_hwd = np.transpose(prob_np, (1, 2, 0))  # back to H,W,D
 
+    print("UNet3D Debug — Probability stats:",
+      "min=", float(prob_np.min()),
+      "max=", float(prob_np.max()),
+      "mean=", float(prob_np.mean()))
+
     mask = (prob_hwd >= threshold).astype(np.uint8)
     return mask
 
