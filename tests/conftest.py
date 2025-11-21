@@ -9,9 +9,10 @@ SLICER_MODULE = os.path.join(REPO_ROOT, "slicer_module")
 if SLICER_MODULE not in sys.path:
     sys.path.insert(0, SLICER_MODULE)
 
-BACKEND_ROOT = os.path.join(SLICER_MODULE, "PulmoVision", "PulmoBackend")
-if BACKEND_ROOT not in sys.path:
-    sys.path.insert(0, BACKEND_ROOT)
+# Allow ``import PulmoBackend`` without relying on PYTHONPATH
+PULMOVISION_ROOT = os.path.join(SLICER_MODULE, "PulmoVision")
+if PULMOVISION_ROOT not in sys.path:
+    sys.path.insert(0, PULMOVISION_ROOT)
 
 
 def make_demo_volume():

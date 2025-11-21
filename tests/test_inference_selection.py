@@ -7,7 +7,7 @@ except Exception:
     torch = None
 
 from PulmoBackend import inference
-from conftest import make_demo_volume
+from tests.conftest import make_demo_volume
 
 
 @pytest.mark.skipif(torch is None, reason="PyTorch required for UNet3D")

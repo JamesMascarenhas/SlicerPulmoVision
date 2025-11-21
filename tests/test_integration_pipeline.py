@@ -8,7 +8,7 @@ except Exception:
 
 from PulmoBackend.inference import get_default_msd_unet3d_checkpoint_path
 from PulmoBackend.pipeline import run_pulmo_pipeline
-from conftest import make_demo_volume
+from tests.conftest import make_demo_volume
 
 
 @pytest.mark.skipif(torch is None, reason="PyTorch required for UNet3D smoke test")
