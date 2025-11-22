@@ -197,6 +197,14 @@ class PulmoVisionWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             if mrmlWidget:
                 mrmlWidget.setMRMLScene(slicer.mrmlScene)
 
+        # Keep the UNet probability threshold parameter synchronized with the
+        # slider in real time so downstream processing always receives the
+        # latest user-selected cutoff.
+        if hasattr(self.ui, "unetThresholdSlider"):
+            self.ui.unetThresholdSlider.valueChanged.connect(
+                self._onUnetThresholdChanged
+            ) 
+        
         # Create logic class. Logic implements all computations that should be possible to run
         # in batch mode, without a graphical user interface.
         self.logic = PulmoVisionLogic()
@@ -292,7 +300,13 @@ class PulmoVisionWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self._checkCanApply()
             if hasattr(self.ui, "featureTableView"):
                 self.ui.featureTableView.setMRMLTableNode(self._parameterNode.outputFeatureTable)
+            
+            # Ensure the UNet threshold slider reflects the stored parameter
+            # value (and vice versa) when the parameter node is swapped or
+            # reloaded.
+            self._updateUnetThresholdSlider()
 
+    
     def _checkCanApply(self, caller=None, event=None) -> None:
         has_input_data = False
         if self._parameterNode and self._parameterNode.inputVolume:
@@ -307,7 +321,23 @@ class PulmoVisionWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.ui.applyButton.enabled = False
         if hasattr(self.ui, "featureTableView") and self._parameterNode:
             self.ui.featureTableView.setMRMLTableNode(self._parameterNode.outputFeatureTable)
+    def _onUnetThresholdChanged(self, value: float) -> None:
+        """Persist the slider value to the parameter node immediately."""
 
+        if self._parameterNode:
+            self._parameterNode.segmentationThreshold = float(value)
+
+    def _updateUnetThresholdSlider(self) -> None:
+        """Sync the slider display from the parameter node state."""
+
+        if not hasattr(self.ui, "unetThresholdSlider"):
+            return
+
+        if self._parameterNode:
+            self.ui.unetThresholdSlider.value = float(
+                self._parameterNode.segmentationThreshold
+            )
+            
     def onApplyButton(self) -> None:
         """Run processing when user clicks "Apply" button."""
         self.ui.statusLabel.setText(_("Running PulmoVision pipeline…"))
