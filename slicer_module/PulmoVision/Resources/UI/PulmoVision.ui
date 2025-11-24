@@ -312,12 +312,17 @@ QLabel#statusLabel {
         </property>
         <item>
             <property name="text">
-                <string>unet3d</string>
+                <string>UNet3D (recommended)</string>
             </property>
             </item>
             <item>
             <property name="text">
-                <string>percentile</string>
+                <string>Classical HU Thresholding</string>
+            </property>
+            </item>
+            <item>
+            <property name="text">
+                <string>Percentile (debug)</string>
             </property>
             </item>
         <property name="SlicerParameterName" stdset="0">
@@ -328,7 +333,7 @@ QLabel#statusLabel {
       <item row="1" column="0">
        <widget class="QLabel" name="percentileLabel">
         <property name="text">
-         <string>Percentile threshold:</string>
+         <string>Percentile threshold (debug):</string>
         </property>
        </widget>
       </item>
@@ -351,6 +356,38 @@ QLabel#statusLabel {
         </property>
         <property name="SlicerParameterName" stdset="0">
          <string>segmentationPercentile</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="unetThresholdLabel">
+        <property name="text">
+         <string>UNet probability threshold:</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="ctkSliderWidget" name="unetThresholdSlider">
+        <property name="toolTip">
+         <string>Minimum probability for voxel inclusion when running the UNet3D model.</string>
+        </property>
+        <property name="minimum">
+         <double>0.000000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>1.000000000000000</double>
+        </property>
+        <property name="decimals">
+         <number>2</number>
+        </property>
+        <property name="value">
+         <double>0.500000000000000</double>
+        </property>
+        <property name="singleStep">
+         <double>0.050000000000000</double>
+        </property>
+        <property name="SlicerParameterName" stdset="0">
+         <string>segmentationThreshold</string>
         </property>
        </widget>
       </item>
