@@ -683,6 +683,17 @@ def run_placeholder_segmentation(
             metadata["messages"].append(
                 "UNet3D was requested but usable weights were not found; using HU Threshold segmentation instead."
             )
+            metadata["used_method"] = "hu_threshold"
+            try:
+                mask = hu_threshold_segmentation(volume, threshold_hu=threshold_hu)
+                return (mask, metadata) if return_metadata else mask
+            except Exception as exc:  # noqa: BLE001 - surface HU errors
+                metadata["messages"].append(
+                    f"HU threshold segmentation failed ({exc})."
+                )
+                # If HU fallback failed and percentile fallback is allowed, drop through
+                # to the percentile handler below. Otherwise, we'll raise with the
+                # accumulated messages.
 
         if allow_fallback_to_percentile:
             if method == "unet3d" and metadata["used_method"] != "unet3d":
