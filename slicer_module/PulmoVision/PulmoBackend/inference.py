@@ -621,6 +621,11 @@ def run_placeholder_segmentation(
         "checkpoint_metadata": None,
     }
 
+    if method == "hu_threshold":
+        metadata["used_method"] = "hu_threshold"
+        mask = hu_threshold_segmentation(volume, threshold_hu=threshold_hu)
+        return (mask, metadata) if return_metadata else mask
+    
     if method == "percentile":
         metadata["used_method"] = "percentile"
         mask = percentile_threshold_segmentation(volume, percentile=percentile)
