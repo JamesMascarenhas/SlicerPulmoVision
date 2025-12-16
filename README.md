@@ -227,7 +227,7 @@ These weights are automatically loaded by the UNet3D inference path in Slicer (v
 
 Below is a rough example of a UNet3D segmentation overlaid on a CT scan:
 
-<img src="docs/rough_3D_UNet_Example.png" width="750"/>
+<img src="docs/rough_3D_UNet_Example" width="750"/>
 
 This represents the expected baseline quality for a lightweight 3D U-Net trained on a small subset of MSD Task06 Lung. It is **not** intended for diagnostic use, but to demonstrate an integrated, end-to-end radiomics workflow.
 
