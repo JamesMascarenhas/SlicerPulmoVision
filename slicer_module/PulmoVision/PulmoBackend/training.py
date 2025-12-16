@@ -147,10 +147,24 @@ def train_unet3d(
     lr: float = 1e-3,
     device: str = None,
     save_path: str = None,
+    val_fraction: float = 0.2,
+    seed: int = 42,
+    patience: Optional[int] = None,
 ):
     """
     Train UNet3D on synthetic data. This is meant to be quick and simple,
     just to produce a reasonable model for the pipeline demo.
+
+    Args:
+    epochs: Number of training epochs
+    batch_size: Batch size used for training and validation
+    n_samples: Number of synthetic samples to generate
+    lr: Learning rate
+    device: Torch device to train on.
+    save_path: Where to save the checkpoint
+    val_fraction: Fraction of the dataset reserved for validation (0, 1)
+    seed: Random seed used for deterministic train/val split
+    patience: Optional early stopping patience (in epochs) based on validation Dice
     """
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -161,7 +175,30 @@ def train_unet3d(
         os.makedirs(ckpt_dir, exist_ok=True)
 
     dataset = SyntheticLungTumorDataset(n_samples=n_samples)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+    val_len = max(1, int(len(dataset) * val_fraction)) if val_fraction > 0 else 0
+    train_len = len(dataset) - val_len
+    if train_len <= 0:
+        raise ValueError(
+            f"val_fraction={val_fraction} leaves no training samples (dataset size: {len(dataset)})"
+        )
+
+    generator = torch.Generator().manual_seed(seed)
+    if val_len > 0:
+        train_set, val_set = torch.utils.data.random_split(
+            dataset, [train_len, val_len], generator=generator
+        )
+    else:
+        train_set = dataset
+        val_set = None
+
+    train_loader = DataLoader(
+        train_set, batch_size=batch_size, shuffle=True, num_workers=0
+    )
+    val_loader = (
+        DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=0)
+        if val_set is not None
+        else None
+    )
 
     model = UNet3D(in_channels=1, out_channels=1, base_channels=16).to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -171,12 +208,13 @@ def train_unet3d(
     bce = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
     model.train()
-    global_step = 0
+    best_val_dice = -1.0
+    epochs_without_improvement = 0
 
     for epoch in range(epochs):
         running_loss = 0.0
 
-        for vol, m in dataloader:
+        for vol, m in train_loader:
             # vol, m are (B, 1, H, W, D); convert to NCDHW
             vol = vol.permute(0, 1, 4, 2, 3)  # (B,1,D,H,W)
             m = m.permute(0, 1, 4, 2, 3)
@@ -196,23 +234,95 @@ def train_unet3d(
             optimizer.step()
 
             running_loss += loss.item()
-            global_step += 1
+            
+        avg_loss = running_loss / max(1, len(train_loader))
+        print(f"[Epoch {epoch+1}/{epochs}] Train Loss: {avg_loss:.4f}")
 
-        avg_loss = running_loss / max(1, len(dataloader))
-        print(f"[Epoch {epoch+1}/{epochs}] Loss: {avg_loss:.4f}")
+        if val_loader is None:
+            continue
 
-    checkpoint = {
-        "state_dict": model.state_dict(),
-        "meta": {
-            "schema_version": 1,
-            "trained_on": "synthetic lung tumor demo",
-            "base_channels": 16,
-            "checkpoint_type": "synthetic-demo",
-            "notes": "Trained UNet3D on synthetic lung tumor dataset",
-        },
-    }
-    torch.save(checkpoint, save_path)
-    print(f"Saved UNet3D weights to: {save_path}")
+        model.eval()
+        val_bce_total = 0.0
+        val_dice_loss_total = 0.0
+        dice_scores = []
+        iou_scores = []
+        with torch.no_grad():
+            for vol, m in val_loader:
+                vol = vol.permute(0, 1, 4, 2, 3)
+                m = m.permute(0, 1, 4, 2, 3)
+
+                vol = vol.to(device)
+                m = m.to(device)
+
+                logits = model(vol)
+                prob = torch.sigmoid(logits)
+
+                val_bce = bce(logits, m)
+                val_dice_loss = dice_loss(prob, m)
+
+                val_bce_total += val_bce.item()
+                val_dice_loss_total += val_dice_loss.item()
+
+                pred_binary = (prob > 0.5).float()
+                intersection = (pred_binary * m).sum().item()
+                union = (pred_binary + m - pred_binary * m).sum().item()
+                dice_score = (2 * intersection + 1.0) / (pred_binary.sum().item() + m.sum().item() + 1.0)
+                iou_score = intersection / (union + 1e-8) if union > 0 else 0.0
+                dice_scores.append(dice_score)
+                iou_scores.append(iou_score)
+
+        val_avg_bce = val_bce_total / max(1, len(val_loader))
+        val_avg_dice_loss = val_dice_loss_total / max(1, len(val_loader))
+        val_avg_dice = float(np.mean(dice_scores)) if dice_scores else 0.0
+        val_avg_iou = float(np.mean(iou_scores)) if iou_scores else 0.0
+
+        print(
+            f"[Epoch {epoch+1}/{epochs}] Val BCE: {val_avg_bce:.4f} | "
+            f"Val Dice Loss: {val_avg_dice_loss:.4f} | Val Dice: {val_avg_dice:.4f} | "
+            f"Val IoU: {val_avg_iou:.4f}"
+        )
+
+        if val_avg_dice > best_val_dice:
+            best_val_dice = val_avg_dice
+            epochs_without_improvement = 0
+            checkpoint = {
+                "state_dict": model.state_dict(),
+                "meta": {
+                    "schema_version": 1,
+                    "trained_on": "synthetic lung tumor demo",
+                    "base_channels": 16,
+                    "checkpoint_type": "synthetic-demo",
+                    "notes": "Trained UNet3D on synthetic lung tumor dataset",
+                },
+            }
+            torch.save(checkpoint, save_path)
+            print(
+                f"Saved improved UNet3D weights to: {save_path} (Val Dice: {best_val_dice:.4f})"
+            )
+        else:
+            epochs_without_improvement += 1
+
+        if patience is not None and epochs_without_improvement >= patience:
+            print(
+                f"Early stopping triggered after {patience} epochs without validation improvement."
+            )
+            break
+
+        model.train()
+
+    if best_val_dice < 0:
+        checkpoint = {
+            "state_dict": model.state_dict(),
+            "meta": {
+                "schema_version": 1,
+                "trained_on": "synthetic lung tumor demo",
+                "base_channels": 16,
+                "checkpoint_type": "synthetic-demo",
+                "notes": "Trained UNet3D on synthetic lung tumor dataset",
+            },
+        }
+        torch.save(checkpoint, save_path)
+        print(f"Saved UNet3D weights to: {save_path}")
     return save_path
 
 
@@ -227,6 +337,9 @@ def train_msd_unet3d(
     save_path: str = None,
     augment: bool = True,
     training_on_james: bool = False,
+    val_fraction: float = 0.2,
+    seed: int = 42,
+    patience: Optional[int] = None,
 ):
     """
     Train UNet3D on real MSD Task06 Lung data using tumor-aware 3D patches.
@@ -253,12 +366,40 @@ def train_msd_unet3d(
         patch_size=patch_size,
         augment=augment,
     )
-    dataloader = DataLoader(
-        dataset,
+
+    val_len = max(1, int(len(dataset) * val_fraction)) if val_fraction > 0 else 0
+    train_len = len(dataset) - val_len
+    if train_len <= 0:
+        raise ValueError(
+            f"val_fraction={val_fraction} leaves no training samples (dataset size: {len(dataset)})"
+        )
+
+    generator = torch.Generator().manual_seed(seed)
+    if val_len > 0:
+        train_set, val_set = torch.utils.data.random_split(
+            dataset, [train_len, val_len], generator=generator
+        )
+    else:
+        train_set = dataset
+        val_set = None
+
+    train_loader = DataLoader(
+        train_set,
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
         pin_memory=torch.cuda.is_available(),
+    )
+    val_loader = (
+        DataLoader(
+            val_set,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=num_workers,
+            pin_memory=torch.cuda.is_available(),
+        )
+        if val_set is not None
+        else None
     )
 
     model = UNet3D(in_channels=1, out_channels=1, base_channels=16).to(device)
@@ -269,9 +410,12 @@ def train_msd_unet3d(
     bce = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
     model.train()
+    best_val_dice = -1.0
+    epochs_without_improvement = 0
+
     for epoch in range(epochs):
         running_loss = 0.0
-        for images, masks in dataloader:
+        for images, masks in train_loader:
             images = images.to(device)  # (B,1,D,H,W)
             masks = masks.to(device)    # (B,1,D,H,W), 0/1
 
@@ -288,24 +432,99 @@ def train_msd_unet3d(
 
             running_loss += loss.item()
 
-        avg_loss = running_loss / max(1, len(dataloader))
+        avg_loss = running_loss / max(1, len(train_loader))
         print(f"[Epoch {epoch+1}/{epochs}] MSD train loss: {avg_loss:.4f}")
 
-    checkpoint = {
-        "state_dict": model.state_dict(),
-        "meta": {
-            "schema_version": 1,
-            "trained_on": "Task06_Lung",
-            "checkpoint_type": "msd-task06",
-            "base_channels": 16,
-            "epochs": epochs,
-            "patch_size": list(patch_size),
-            "lr": lr,
-            "notes": "UNet3D trained on MSD Task06 Lung patches with tumor-aware sampling",
-        },
-    }
-    torch.save(checkpoint, save_path)
-    print(f"Saved UNet3D weights to: {save_path}")
+        if val_loader is None:
+            continue
+
+        model.eval()
+        val_bce_total = 0.0
+        val_dice_loss_total = 0.0
+        dice_scores = []
+        iou_scores = []
+        with torch.no_grad():
+            for images, masks in val_loader:
+                images = images.to(device)
+                masks = masks.to(device)
+
+                logits = model(images)
+                probs = torch.sigmoid(logits)
+
+                val_bce = bce(logits, masks)
+                val_dice_loss = dice_loss(probs, masks)
+
+                val_bce_total += val_bce.item()
+                val_dice_loss_total += val_dice_loss.item()
+
+                pred_binary = (probs > 0.5).float()
+                intersection = (pred_binary * masks).sum().item()
+                union = (pred_binary + masks - pred_binary * masks).sum().item()
+                dice_score = (2 * intersection + 1.0) / (
+                    pred_binary.sum().item() + masks.sum().item() + 1.0
+                )
+                iou_score = intersection / (union + 1e-8) if union > 0 else 0.0
+                dice_scores.append(dice_score)
+                iou_scores.append(iou_score)
+
+        val_avg_bce = val_bce_total / max(1, len(val_loader))
+        val_avg_dice_loss = val_dice_loss_total / max(1, len(val_loader))
+        val_avg_dice = float(np.mean(dice_scores)) if dice_scores else 0.0
+        val_avg_iou = float(np.mean(iou_scores)) if iou_scores else 0.0
+
+        print(
+            f"[Epoch {epoch+1}/{epochs}] Val BCE: {val_avg_bce:.4f} | "
+            f"Val Dice Loss: {val_avg_dice_loss:.4f} | Val Dice: {val_avg_dice:.4f} | "
+            f"Val IoU: {val_avg_iou:.4f}"
+        )
+
+        if val_avg_dice > best_val_dice:
+            best_val_dice = val_avg_dice
+            epochs_without_improvement = 0
+            checkpoint = {
+                "state_dict": model.state_dict(),
+                "meta": {
+                    "schema_version": 1,
+                    "trained_on": "Task06_Lung",
+                    "checkpoint_type": "msd-task06",
+                    "base_channels": 16,
+                    "epochs": epochs,
+                    "patch_size": list(patch_size),
+                    "lr": lr,
+                    "notes": "UNet3D trained on MSD Task06 Lung patches with tumor-aware sampling",
+                },
+            }
+            torch.save(checkpoint, save_path)
+            print(
+                f"Saved improved UNet3D weights to: {save_path} (Val Dice: {best_val_dice:.4f})"
+            )
+        else:
+            epochs_without_improvement += 1
+
+        if patience is not None and epochs_without_improvement >= patience:
+            print(
+                f"Early stopping triggered after {patience} epochs without validation improvement."
+            )
+            break
+
+        model.train()
+
+    if best_val_dice < 0:
+        checkpoint = {
+            "state_dict": model.state_dict(),
+            "meta": {
+                "schema_version": 1,
+                "trained_on": "Task06_Lung",
+                "checkpoint_type": "msd-task06",
+                "base_channels": 16,
+                "epochs": epochs,
+                "patch_size": list(patch_size),
+                "lr": lr,
+                "notes": "UNet3D trained on MSD Task06 Lung patches with tumor-aware sampling",
+            },
+        }
+        torch.save(checkpoint, save_path)
+        print(f"Saved UNet3D weights to: {save_path}")
     return save_path
 
 
@@ -320,18 +539,11 @@ def _parse_args():
     parser.add_argument("--epochs", type=int, default=5, help="Number of training epochs")
     parser.add_argument("--batch-size", type=int, default=1, help="Batch size")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
-    parser.add_argument(
-        "--patch-size",
-        type=int,
-        nargs=3,
-        default=[96, 96, 96],
-        help="Patch size used for MSD training (D H W)",
-    )
-    parser.add_argument(
-        "--on-james",
-        action="store_true",
-        help="Use James's hardcoded MSD dataset path instead of prompting",
-    )
+    parser.add_argument("--val-fraction", type=float, default=0.2, help="Validation set fraction")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for deterministic splits")
+    parser.add_argument("--patience", type=int, default=None, help="Optional early stopping patience based on validation Dice")
+    parser.add_argument("--patch-size", type=int, nargs=3, default=[96, 96, 96], help="Patch size used for MSD training (D H W)")
+    parser.add_argument("--on-james", action="store_true", help="Use James's hardcoded MSD dataset path instead of prompting")
     parser.add_argument("--num-workers", type=int, default=2, help="DataLoader workers")
     parser.add_argument("--no-augment", action="store_true", help="Disable simple flipping augmentation")
     parser.add_argument("--output", type=str, default=None, help="Where to save the checkpoint")
@@ -352,6 +564,9 @@ if __name__ == "__main__":
             save_path=args.output,
             augment=not args.no_augment,
             training_on_james=args.on_james,
+            val_fraction=args.val_fraction,
+            seed=args.seed,
+            patience=args.patience,
         )
     else:
         train_unet3d(
@@ -359,4 +574,7 @@ if __name__ == "__main__":
             batch_size=args.batch_size,
             lr=args.lr,
             save_path=args.output,
+            val_fraction=args.val_fraction,
+            seed=args.seed,
+            patience=args.patience,
         )
